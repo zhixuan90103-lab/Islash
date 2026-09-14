@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<!--
+  portrait-webgpu-base entry.
+  DOM: #shell > #viewport > #app > #stage > (canvas | #ui-root)
+  See AGENTS.md · docs/ENGINEERING.md
+-->
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>Portrait WebGPU Base</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="shell">
+      <div id="viewport">
+        <div id="app">
+          <div id="stage" aria-label="game-stage">
+            <div id="ui-root">
+              <header>
+                <p class="eyebrow">划切原型</p>
+                <h1>一刀两块 · 重力掉落</h1>
+                <p id="status" class="status">booting…</p>
+              </header>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="device-switcher" aria-label="device-viewport-switcher">
+      <button type="button" data-device="phone">手机竖屏</button>
+      <button type="button" data-device="pad">Pad 竖屏</button>
+    </div>
+    <div id="device-label"></div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
