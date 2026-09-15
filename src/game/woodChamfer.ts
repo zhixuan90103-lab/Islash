@@ -138,7 +138,12 @@ export function planChamfer(
   const live: { i: number; a: Poly2; b: Poly2 }[] = [];
   for (let i = 0; i < n; i++) {
     const seg = clipOffsetEdge(lines, i);
-    if (seg) live.push({ i, a: seg.a, b: seg.b });
+    if (
+      seg &&
+      Math.hypot(seg.b.x - seg.a.x, seg.b.y - seg.a.y) > 1e-5
+    ) {
+      live.push({ i, a: seg.a, b: seg.b });
+    }
   }
   if (live.length < 3) return prismPlan(back);
 
@@ -162,16 +167,19 @@ export function planChamfer(
     }
     if (!almostSame(s.a, s.b)) front.push(s.b);
 
-    if (almostSame(s.b, t.a)) continue;
-    const verts: number[] = [];
-    let v = (s.i + 1) % n;
-    for (let guard = 0; guard < n; guard++) {
-      verts.push(v);
-      if (v === t.i) break;
-      v = (v + 1) % n;
+    const adjacent = t.i === (s.i + 1) % n;
+    const mitered = adjacent && almostSame(s.b, t.a);
+    if (!mitered) {
+      const verts: number[] = [];
+      let v = (s.i + 1) % n;
+      for (let guard = 0; guard < n; guard++) {
+        verts.push(v);
+        if (v === t.i) break;
+        v = (v + 1) % n;
+      }
+      if (verts.length) gaps.push({ verts, innerA: s.b, innerB: t.a });
+      if (!almostSame(s.b, t.a)) front.push(t.a);
     }
-    if (verts.length) gaps.push({ verts, innerA: s.b, innerB: t.a });
-    front.push(t.a);
   }
   if (front.length >= 2 && almostSame(front[0], front[front.length - 1])) {
     front.pop();
@@ -251,6 +259,14 @@ export function createWoodSolid(
     const ia = fv(gap.innerA, zFront);
     const ib = fv(gap.innerB, zFront);
     const outer = gap.verts.map((vi) => fv(back[vi], zChamfer));
+    if (outer.length === 0) continue;
+    const pinched = almostSame(gap.innerA, gap.innerB);
+    if (pinched) {
+      for (let k = 0; k + 1 < outer.length; k++) {
+        pushTri(pos, nrm, ia, outer[k], outer[k + 1]);
+      }
+      continue;
+    }
     if (outer.length === 1) {
       pushTri(pos, nrm, outer[0], ia, ib);
       continue;
