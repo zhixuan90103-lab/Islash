@@ -4,21 +4,54 @@ import {
   isInDesignBounds,
   type StageLayout,
 } from '../adapt/design';
+import { SLASH } from './design';
 
 export type DesignPoint = { x: number; y: number };
+
+export type MeshSlashProgress = {
+  c0: DesignPoint;
+  c1: DesignPoint;
+  chord: number;
+  inside: boolean;
+  enterEdge: number;
+};
 
 export type SlashStroke = {
   pointerId: number;
   points: DesignPoint[];
   armed: boolean;
-  cutDone: boolean;
+  slicedIds: Set<number>;
+  progress: Map<number, MeshSlashProgress>;
+  /** 切完后必须先回到空白，再贯穿才算下一刀。 */
+  awaitBlank: boolean;
+  startedAt: number;
+  lastAt: number;
 };
 
-const ARM_DIST = 16;
-const INTERP_GAP = 5;
+const ARM_DIST = SLASH.armDist;
+const INTERP_GAP = SLASH.interpGap;
 
 function dist(a: DesignPoint, b: DesignPoint): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+export function strokePathLength(points: DesignPoint[]): number {
+  let len = 0;
+  for (let i = 1; i < points.length; i++) len += dist(points[i - 1], points[i]);
+  return len;
+}
+
+export function strokeSpeedPxPerSec(stroke: SlashStroke): number {
+  const dt = Math.max(0.016, (performance.now() - stroke.startedAt) / 1000);
+  return strokePathLength(stroke.points) / dt;
+}
+
+export function segmentSpeedPxPerSec(
+  a: DesignPoint,
+  b: DesignPoint,
+  dtSec: number,
+): number {
+  return dist(a, b) / Math.max(0.008, dtSec);
 }
 
 export function eventToDesign(
@@ -57,7 +90,11 @@ export function createSlashInput(
   stage: HTMLElement,
   getLayout: () => StageLayout | null,
   hooks: {
-    onMove: (stroke: SlashStroke, lastSeg: [DesignPoint, DesignPoint]) => void;
+    onMove: (
+      stroke: SlashStroke,
+      lastSeg: [DesignPoint, DesignPoint],
+      dtSec: number,
+    ) => void;
     onEnd: (stroke: SlashStroke | null) => void;
     onStroke?: (stroke: SlashStroke) => void;
   },
@@ -73,15 +110,22 @@ export function createSlashInput(
 
   const onDown = (e: PointerEvent) => {
     if (!e.isPrimary) return;
+    const t = e.target;
+    if (t instanceof Element && t.closest('.debug-panel')) return;
     if (stroke) finish();
     const layout = getLayout();
     if (!layout) return;
     const p = eventToDesign(e, stage, layout);
+    const now = performance.now();
     stroke = {
       pointerId: e.pointerId,
       points: [p],
       armed: false,
-      cutDone: false,
+      slicedIds: new Set(),
+      progress: new Map(),
+      awaitBlank: false,
+      startedAt: now,
+      lastAt: now,
     };
     hooks.onStroke?.(stroke);
     e.preventDefault();
@@ -101,21 +145,25 @@ export function createSlashInput(
       typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : [e];
     const batch = coalesced.length > 0 ? coalesced : [e];
 
+    const now = performance.now();
+    const dtSec = Math.max(0.008, (now - stroke.lastAt) / 1000);
+    stroke.lastAt = now;
+
     for (const ev of batch) {
       const p = eventToDesign(ev, stage, layout);
       const before = stroke.points.length;
       appendInterpolated(stroke.points, p);
+      const added = stroke.points.length - before;
       if (!stroke.armed && stroke.points.length >= 2) {
         const origin = stroke.points[0];
         if (dist(origin, p) >= ARM_DIST) stroke.armed = true;
       }
-      if (stroke.points.length > before) {
-        hooks.onStroke?.(stroke);
-      }
-      if (stroke.armed && stroke.points.length > before) {
-        const origin = stroke.points[0];
-        const latest = stroke.points[stroke.points.length - 1];
-        hooks.onMove(stroke, [origin, latest]);
+      if (added > 0) hooks.onStroke?.(stroke);
+      if (stroke.armed && added > 0) {
+        const stepDt = dtSec / added;
+        for (let i = before; i < stroke.points.length; i++) {
+          hooks.onMove(stroke, [stroke.points[i - 1], stroke.points[i]], stepDt);
+        }
       }
     }
   };
@@ -127,7 +175,6 @@ export function createSlashInput(
 
   const onCancel = (e: PointerEvent) => {
     if (!stroke || e.pointerId !== stroke.pointerId) return;
-    stroke.cutDone = stroke.cutDone;
     finish();
   };
 

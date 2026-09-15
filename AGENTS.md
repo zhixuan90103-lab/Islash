@@ -1,12 +1,14 @@
-# AGENTS.md — portrait-webgpu-base
+# AGENTS.md — Islash Cut
 
 > **打开本仓库时的第一入口。**  
-> 合并自 **niantu**（适配/TS/预览）+ **three-webgpu-cap-shell**（打包/文档/bootstrap/可验证 demo）。
+> 壳：portrait-webgpu-base（niantu 适配 + three-webgpu-cap-shell 打包）。  
+> 玩法：划切练习原型（`src/game/`）。
 
 ## 一句话
 
-**TypeScript + Three.js WebGPU + Vite + Capacitor iOS** 竖屏手游稳健底座。  
-设计空间固定 **390×844**，contain letterbox；桌面可切手机/Pad 预览；`base: './'` 保证真机资源路径。
+**TypeScript + Three.js WebGPU + Vite + Capacitor iOS** 竖屏。  
+设计空间 **390×844** contain letterbox；`base: './'`。  
+滑动=刀，盒子=木头；划穿 1 变 2，大块留下，小块按刀向飞出。
 
 ## 入口地图
 
@@ -24,6 +26,9 @@
 | 构建 | `vite.config.ts`（**`base: './'`**） |
 | iOS 注入 | `scripts/bootstrap-ios.mjs` |
 | 音效方案（未实现） | `docs/AUDIO.md` |
+| 划切规范 | `docs/SLASH-DESIGN.md`（参数 `src/game/design.ts`） |
+| 划切调研 | `docs/SLASH-RESEARCH.md` |
+| 连续切技术 | `docs/SLASH-TECH.md` |
 
 ## DOM（勿拆）
 
@@ -44,6 +49,8 @@
 6. **Pad 只改外层视口**，不改 `DESIGN_*`  
 7. **改 Swift 改 `plugins/native-haptics/`** 再 `ios:bootstrap`；震动接线见 `docs/HAPTICS.md`。Capacitor 8 的 `SceneDelegate` 必须 `rootViewController = BridgeViewController()`（默认 `CAPBridgeViewController` 不会注册插件）。不要用 JS `prepare()` 判断是否接上；真机 HUD 看 `plugin: true` + 点「点我震动」。  
 8. **无 WebGPU 则明确失败**，不静默 WebGL  
+9. **玩法参数只改 `src/game/design.ts`**（或调试面板）。砍飞必须质量归一（`J = mass * Δv`），禁止固定冲量打所有块。  
+10. **iOS**：`appId` = `com.wangzhixuan.islash.cut`，显示名 Islash Cut；真机不要 Simulator。  
 
 ## 命令
 
@@ -51,9 +58,9 @@
 npm install
 npm run dev           # http://127.0.0.1:5190/
 npm run build
-npm run cap:sync
-npm run ios:bootstrap # 首次 / 修插件
-npm run ios
+npm run cap:sync      # 网页改动同步 iOS
+npm run ios:bootstrap # 首次 / 修 Swift 插件
+npm run ios           # build + sync + 开 Xcode
 ```
 
 查询参数：`?preview=0|1` · `?debugFit=1`  
@@ -61,13 +68,15 @@ npm run ios
 
 ## 业务怎么加
 
-- 玩法：改 `src/main.ts` 或 `src/game/*`  
+- 玩法：`src/game/`；规则与参数表：[docs/SLASH-DESIGN.md](docs/SLASH-DESIGN.md)  
 - 保留：adapt / create-renderer / haptics / plugins / `base`  
 - 触控：`clientToDesign` + 忽略 letterbox 外  
-- 音效：按 `docs/AUDIO.md` 接入；禁止热路径 `new Audio()` / 每发一次桥  
+- UI：只挂 `#ui-root`（调试面板已在此）  
+- 音效：按 `docs/AUDIO.md`；禁止热路径 `new Audio()` / 每发一次桥  
 
 ## 刻意不做
 
-- 具体游戏玩法（demo 立方体可删）  
+- 关卡 / 分数 / 连击 / 其它手势族  
+- 伪造「重侧下垂」力矩  
 - Android（可后加）  
 - WebGL 静默回退  

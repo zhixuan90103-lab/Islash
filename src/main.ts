@@ -1,6 +1,6 @@
 /**
- * Boot: safe-area → device preview → WebGPU design stage → minimal demo.
- * Replace this file (or add src/game/*) for real gameplay.
+ * Boot: safe-area → device preview → WebGPU design stage → 划切玩法。
+ * 玩法在 src/game/，参数在 src/game/design.ts。
  * Keep: adapt/*, create-renderer, utils/haptics, DOM contract.
  */
 
@@ -14,7 +14,7 @@ import {
   watchStageLayout,
   type StageLayout,
 } from './adapt/design';
-import { mountSlashWorld } from './game/slashWorld';
+import { VIEW, mountSlashWorld } from './game';
 import {
   mountDevicePreview,
   type DevicePreviewController,
@@ -45,16 +45,16 @@ async function boot(): Promise<void> {
 
   const renderer = await createRenderer({ container: stage });
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x0b1020);
+  scene.background = new THREE.Color(VIEW.bg);
 
   const camera = new THREE.PerspectiveCamera(
-    45,
+    VIEW.fov,
     DESIGN_WIDTH / DESIGN_HEIGHT,
     0.1,
     100,
   );
-  camera.position.set(0, 1.9, 6.2);
-  camera.lookAt(0, 0.7, 0);
+  camera.position.set(0, 0, VIEW.cameraZ);
+  camera.lookAt(0, 0, 0);
 
   scene.add(new THREE.HemisphereLight(0xdbeafe, 0x1e293b, 1.2));
   const key = new THREE.DirectionalLight(0xffffff, 1.4);

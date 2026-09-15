@@ -1,21 +1,28 @@
 import * as THREE from 'three';
+import { applyBladeImpulse, pieceVolume } from './bladeForce';
+import { resolveCutBySegment } from './cutTarget';
+import { mountSlashDebugPanel } from './slashDebugPanel';
+import { createSlashOverlay } from './slashDebug';
 import { cutMeshBySlash, prepareCuttable } from './slashCut';
-import { createSlashOverlay, type DebugHit } from './slashDebug';
 import {
-  clipPolylineToHull,
-  pointInConvexHull,
-  projectMeshHull,
-  strokeHitsMesh,
-  throughThreshold,
-} from './slashHit';
-import { createSlashInput, type DesignPoint, type SlashStroke } from './slashInput';
+  createSlashInput,
+  segmentSpeedPxPerSec,
+  type DesignPoint,
+  type SlashStroke,
+} from './slashInput';
 import { createSlashPhysics } from './slashPhysics';
+import { createWoodSet } from './wood';
 import type { StageLayout } from '../adapt/design';
 
 export type SlashSession = {
   step: (dt: number) => void;
   dispose: () => void;
 };
+
+function report(msg: string): void {
+  const el = document.getElementById('status');
+  if (el) el.textContent = msg;
+}
 
 export async function mountSlashWorld(
   stage: HTMLElement,
@@ -25,48 +32,21 @@ export async function mountSlashWorld(
 ): Promise<SlashSession> {
   const physics = await createSlashPhysics();
   const overlay = createSlashOverlay(stage);
-  const cuttables: THREE.Mesh[] = [];
+  const wood = createWoodSet(scene, physics);
+  wood.spawn();
 
-  const floor = new THREE.Mesh(
-    new THREE.BoxGeometry(8, 0.2, 8),
-    new THREE.MeshStandardMaterial({
-      color: 0x111827,
-      metalness: 0.05,
-      roughness: 0.9,
-    }),
-  );
-  floor.position.y = -0.1;
-  scene.add(floor);
-  physics.addMesh(floor, 'staticBox');
-
-  const mesh = new THREE.Mesh(
-    new THREE.BoxGeometry(1.1, 1.1, 1.1),
-    new THREE.MeshStandardMaterial({
-      color: 0x7c3aed,
-      metalness: 0.12,
-      roughness: 0.4,
-    }),
-  );
-  mesh.position.set(0, 1.35, 0);
-  scene.add(mesh);
-  prepareCuttable(mesh);
-  physics.addMesh(mesh, 'staticBox');
-  cuttables.push(mesh);
-
-  const pieceVolume = (m: THREE.Mesh) => {
-    m.geometry.computeBoundingBox();
-    const bb = m.geometry.boundingBox;
-    if (!bb) return 0;
-    const s = bb.getSize(new THREE.Vector3());
-    return Math.max(0, s.x * s.y * s.z);
-  };
-
-  const replaceCut = (old: THREE.Mesh, a: THREE.Mesh, b: THREE.Mesh) => {
+  const replaceCut = (
+    old: THREE.Mesh,
+    a: THREE.Mesh,
+    b: THREE.Mesh,
+    bladeDir: THREE.Vector3,
+    hitPoint: THREE.Vector3,
+    speedPx: number,
+  ): { keep: THREE.Mesh; drop: THREE.Mesh } => {
     physics.removeMesh(old);
     scene.remove(old);
     old.geometry.dispose();
-    const i = cuttables.indexOf(old);
-    if (i >= 0) cuttables.splice(i, 1);
+    wood.forget(old);
 
     const keep = pieceVolume(a) >= pieceVolume(b) ? a : b;
     const drop = keep === a ? b : a;
@@ -74,82 +54,103 @@ export async function mountSlashWorld(
     scene.add(keep);
     prepareCuttable(keep);
     physics.addMesh(keep, 'staticConvex');
-    cuttables.push(keep);
+    wood.cuttables.push(keep);
+    wood.track(keep);
 
     scene.add(drop);
     prepareCuttable(drop);
-    physics.addMesh(drop, 'convex');
-    cuttables.push(drop);
+    const rec = physics.addMesh(drop, 'convex');
+    wood.track(drop);
+
+    applyBladeImpulse(
+      rec.body,
+      camera,
+      keep,
+      drop,
+      bladeDir,
+      hitPoint,
+      speedPx,
+    );
+    return { keep, drop };
   };
 
-  const tryCut = (stroke: SlashStroke, phase: 'move' | 'end') => {
-    if (stroke.cutDone || stroke.points.length < 2) return;
-
-    let best: {
-      mesh: THREE.Mesh;
-      chord: number;
-      c0: DesignPoint;
-      c1: DesignPoint;
-    } | null = null;
-    const hits: DebugHit[] = [];
-    const tip = stroke.points[stroke.points.length - 1];
-
-    for (const mesh of cuttables) {
-      const proj = projectMeshHull(mesh, camera);
-      if (!proj) continue;
-      const rayHits = strokeHitsMesh(mesh, camera, stroke.points);
-      const clipped = clipPolylineToHull(stroke.points, proj.hull);
-      let c0: DesignPoint | null = null;
-      let c1: DesignPoint | null = null;
-      let chord = 0;
-      if (rayHits.length >= 2) {
-        c0 = rayHits[0];
-        c1 = rayHits[rayHits.length - 1];
-        chord = Math.hypot(c1.x - c0.x, c1.y - c0.y);
-      } else if (clipped) {
-        c0 = clipped.c0;
-        c1 = clipped.c1;
-        chord = clipped.length;
-      }
-      const thr = throughThreshold(proj.box);
-      const overlapping = chord >= thr && c0 && c1;
-      const tipOnMesh =
-        rayHits.length > 0 &&
-        (pointInConvexHull(tip, proj.hull) ||
-          (rayHits[rayHits.length - 1] === tip ||
-            (c1 !== null && Math.hypot(tip.x - c1.x, tip.y - c1.y) < 8)));
-      hits.push({ hull: proj.hull, through: !!overlapping });
-      if (!overlapping || !c0 || !c1) continue;
-      const committed = phase === 'end' || !tipOnMesh;
-      if (committed && (!best || chord > best.chord)) {
-        best = { mesh, chord, c0, c1 };
-      }
-    }
-
-    overlay.draw(stroke.points, hits);
+  const tryCutSeg = (
+    stroke: SlashStroke,
+    seg: [DesignPoint, DesignPoint],
+    dtSec: number,
+  ) => {
+    const born = new Set<number>();
+    const snapshot = wood.cuttables.slice();
+    const best = resolveCutBySegment(
+      snapshot,
+      camera,
+      stroke,
+      seg,
+      born,
+    );
     if (!best) return;
-
     camera.updateMatrixWorld(true);
     const result = cutMeshBySlash(best.mesh, camera, best.c0, best.c1);
-    if (!result) return;
-    stroke.cutDone = true;
-    replaceCut(best.mesh, result.a, result.b);
+    if (!result) {
+      report('碰到了但切开失败');
+      return;
+    }
+    stroke.slicedIds.add(best.mesh.id);
+    stroke.progress.clear();
+    stroke.awaitBlank = true;
+    const speedPx = Math.max(
+      segmentSpeedPxPerSec(seg[0], seg[1], dtSec),
+      80,
+    );
+    const { keep, drop } = replaceCut(
+      best.mesh,
+      result.a,
+      result.b,
+      result.bladeDir,
+      result.hitPoint,
+      speedPx,
+    );
+    born.add(keep.id);
+    born.add(drop.id);
+    report('已切开');
   };
 
+  const uiRoot = document.getElementById('ui-root');
+  const panel = uiRoot
+    ? mountSlashDebugPanel(uiRoot, {
+        onWoodChange: () => wood.spawn(),
+        onGravityChange: (y) => physics.setGravityY(y),
+      })
+    : { dispose: () => {} };
+
   const input = createSlashInput(stage, getLayout, {
-    onStroke: (stroke) => overlay.draw(stroke.points, []),
-    onMove: (stroke) => tryCut(stroke, 'move'),
+    onStroke: (stroke) => {
+      const tip = stroke.points[stroke.points.length - 1];
+      if (stroke.points.length === 1) overlay.begin();
+      if (tip) overlay.push(tip);
+    },
+    onMove: (stroke, lastSeg, dtSec) => {
+      overlay.push(lastSeg[1]);
+      tryCutSeg(stroke, lastSeg, dtSec);
+    },
     onEnd: (stroke) => {
-      if (stroke) tryCut(stroke, 'end');
-      if (stroke) overlay.draw(stroke.points, []);
+      if (stroke && stroke.slicedIds.size === 0) {
+        report('划过但未贯穿木板');
+      }
+      overlay.end();
     },
   });
 
   return {
-    step: (dt) => physics.step(dt),
+    step: (dt) => {
+      physics.step(dt);
+      overlay.step();
+    },
     dispose: () => {
       input.dispose();
+      panel.dispose();
       overlay.canvas.remove();
+      wood.dispose();
       physics.dispose();
     },
   };

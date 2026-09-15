@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { DESIGN_HEIGHT, DESIGN_WIDTH } from '../adapt/design';
+import { SLASH } from './design';
 import type { DesignPoint } from './slashInput';
 
 export type ProjBox = {
@@ -56,22 +57,18 @@ export function projectMeshHull(
   camera.updateMatrixWorld(true);
   mesh.updateWorldMatrix(true, false);
   const geom = mesh.geometry;
-  if (!geom.boundingBox) geom.computeBoundingBox();
-  const bb = geom.boundingBox;
-  if (!bb) return null;
+  const pos = geom.getAttribute('position');
+  if (!pos || pos.count < 3) return null;
 
   const pts: DesignPoint[] = [];
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
+  const step = Math.max(1, Math.floor(pos.count / 400));
 
-  for (let i = 0; i < 8; i++) {
-    _v.set(
-      i & 1 ? bb.max.x : bb.min.x,
-      i & 2 ? bb.max.y : bb.min.y,
-      i & 4 ? bb.max.z : bb.min.z,
-    );
+  for (let i = 0; i < pos.count; i += step) {
+    _v.fromBufferAttribute(pos, i);
     _v.applyMatrix4(mesh.matrixWorld);
     _v.project(camera);
     if (!Number.isFinite(_v.x) || !Number.isFinite(_v.y)) continue;
@@ -87,17 +84,29 @@ export function projectMeshHull(
   return { hull: convexHull(pts), box: { minX, minY, maxX, maxY } };
 }
 
-/** Clip segment to convex hull (Cyrus–Beck). Returns chord endpoints or null. */
-export function clipChordToHull(
+export type HullChord = {
+  c0: DesignPoint;
+  c1: DesignPoint;
+  enterEdge: number;
+  exitEdge: number;
+};
+
+function clipLineToHull(
   a: DesignPoint,
   b: DesignPoint,
   hull: ProjPoly,
-): [DesignPoint, DesignPoint] | null {
+  t0: number,
+  t1: number,
+): HullChord | null {
   if (hull.length < 3) return null;
   const dx = b.x - a.x;
   const dy = b.y - a.y;
-  let t0 = 0;
-  let t1 = 1;
+  if (dx * dx + dy * dy < 1e-12) return null;
+
+  let lo = t0;
+  let hi = t1;
+  let enterEdge = -1;
+  let exitEdge = -1;
 
   for (let i = 0; i < hull.length; i++) {
     const e0 = hull[i];
@@ -113,15 +122,71 @@ export function clipChordToHull(
       continue;
     }
     const t = -num / denom;
-    if (denom > 0) t0 = Math.max(t0, t);
-    else t1 = Math.min(t1, t);
-    if (t0 > t1) return null;
+    if (denom > 0) {
+      if (t > lo) {
+        lo = t;
+        enterEdge = i;
+      }
+    } else if (t < hi) {
+      hi = t;
+      exitEdge = i;
+    }
+    if (lo > hi) return null;
   }
 
-  return [
-    { x: a.x + t0 * dx, y: a.y + t0 * dy },
-    { x: a.x + t1 * dx, y: a.y + t1 * dy },
-  ];
+  return {
+    c0: { x: a.x + lo * dx, y: a.y + lo * dy },
+    c1: { x: a.x + hi * dx, y: a.y + hi * dy },
+    enterEdge,
+    exitEdge,
+  };
+}
+
+export function closestHullEdge(p: DesignPoint, hull: ProjPoly): number {
+  let best = 0;
+  let bestD = Infinity;
+  for (let i = 0; i < hull.length; i++) {
+    const a = hull[i];
+    const b = hull[(i + 1) % hull.length];
+    const abx = b.x - a.x;
+    const aby = b.y - a.y;
+    const len2 = abx * abx + aby * aby || 1;
+    let t = ((p.x - a.x) * abx + (p.y - a.y) * aby) / len2;
+    t = Math.max(0, Math.min(1, t));
+    const dx = p.x - (a.x + abx * t);
+    const dy = p.y - (a.y + aby * t);
+    const d = dx * dx + dy * dy;
+    if (d < bestD) {
+      bestD = d;
+      best = i;
+    }
+  }
+  return best;
+}
+
+/** Clip segment to convex hull (Cyrus–Beck). */
+export function clipChordToHull(
+  a: DesignPoint,
+  b: DesignPoint,
+  hull: ProjPoly,
+): HullChord | null {
+  return clipLineToHull(a, b, hull, 0, 1);
+}
+
+/** Infinite line through a,b clipped to hull. Direction stays a→b. */
+export function clipInfiniteLineToHull(
+  a: DesignPoint,
+  b: DesignPoint,
+  hull: ProjPoly,
+): [DesignPoint, DesignPoint] | null {
+  const hit = clipLineToHull(
+    a,
+    b,
+    hull,
+    Number.NEGATIVE_INFINITY,
+    Number.POSITIVE_INFINITY,
+  );
+  return hit ? [hit.c0, hit.c1] : null;
 }
 
 export function pointInConvexHull(p: DesignPoint, hull: ProjPoly): boolean {
@@ -139,15 +204,44 @@ export function chordLength(c0: DesignPoint, c1: DesignPoint): number {
   return Math.hypot(c1.x - c0.x, c1.y - c0.y);
 }
 
+/** 轮廓边：1 上 2 下 3 右 4 左（设计坐标 y 向下）。 */
+export type HullSide = 1 | 2 | 3 | 4;
+
+export function silhouetteSide(p: DesignPoint, box: ProjBox): HullSide {
+  const d1 = Math.abs(p.y - box.minY);
+  const d2 = Math.abs(p.y - box.maxY);
+  const d3 = Math.abs(p.x - box.maxX);
+  const d4 = Math.abs(p.x - box.minX);
+  const m = Math.min(d1, d2, d3, d4);
+  if (m === d1) return 1;
+  if (m === d2) return 2;
+  if (m === d3) return 3;
+  return 4;
+}
+
 export function throughThreshold(box: ProjBox): number {
   const w = box.maxX - box.minX;
   const h = box.maxY - box.minY;
-  return Math.max(6, 0.035 * Math.min(w, h));
+  return Math.max(4, SLASH.hullChordRatio * Math.min(w, h));
 }
 
-/** Walk polyline; keep first–last overlap with hull. */
 const _ndcHit = new THREE.Vector2();
 const _rayHit = new THREE.Raycaster();
+
+export function tipHitsMesh(
+  mesh: THREE.Mesh,
+  camera: THREE.Camera,
+  tip: DesignPoint,
+): boolean {
+  const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+  const prev = mats.map((m) => m.side);
+  for (const m of mats) m.side = THREE.DoubleSide;
+  _ndcHit.set((tip.x / DESIGN_WIDTH) * 2 - 1, -(tip.y / DESIGN_HEIGHT) * 2 + 1);
+  _rayHit.setFromCamera(_ndcHit, camera);
+  const hit = _rayHit.intersectObject(mesh, false).length > 0;
+  for (let i = 0; i < mats.length; i++) mats[i].side = prev[i];
+  return hit;
+}
 
 export function strokeHitsMesh(
   mesh: THREE.Mesh,
@@ -195,10 +289,10 @@ export function clipPolylineToHull(
   for (let i = 1; i < points.length; i++) {
     const clipped = clipChordToHull(points[i - 1], points[i], hull);
     if (!clipped) continue;
-    const len = chordLength(clipped[0], clipped[1]);
+    const len = chordLength(clipped.c0, clipped.c1);
     if (len < 1e-4) continue;
-    if (!first) first = clipped[0];
-    last = clipped[1];
+    if (!first) first = clipped.c0;
+    last = clipped.c1;
     length += len;
   }
   if (!first || !last || length < 1e-4) return null;

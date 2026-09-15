@@ -1,10 +1,10 @@
 # Engineering — portrait-webgpu-base
 
-配套：[AGENTS.md](../AGENTS.md) · [ENTRYPOINTS.md](./ENTRYPOINTS.md) · [MERGE.md](./MERGE.md) · [AUDIO.md](./AUDIO.md) · [HAPTICS.md](./HAPTICS.md)
+配套：[AGENTS.md](../AGENTS.md) · [ENTRYPOINTS.md](./ENTRYPOINTS.md) · [SLASH-DESIGN.md](./SLASH-DESIGN.md) · [MERGE.md](./MERGE.md) · [AUDIO.md](./AUDIO.md) · [HAPTICS.md](./HAPTICS.md)
 
 ## 1. 定位
 
-可复制的 **竖屏 WebGPU 手游底座**：能 dev、能 build、能真机、能震动、桌面≈手机/Pad。不含具体玩法（demo 可删）。
+可复制的 **竖屏 WebGPU 手游底座** + 当前业务 **划切原型**（`src/game/`）。壳能 dev / build / 真机；玩法参数只走 `design.ts`。
 
 ## 2. 目录
 
@@ -17,13 +17,14 @@ portrait-webgpu-base/
 ├── vite.config.ts          # base: './' · port 5190
 ├── capacitor.config.ts     # contentInset never · scrollEnabled false
 ├── src/
-│   ├── main.ts             # demo（可替换）
+│   ├── main.ts             # 壳启动 + 挂划切世界
 │   ├── create-renderer.ts
 │   ├── style.css
 │   ├── adapt/
 │   │   ├── design.ts       # 390×844 · layout · clientToDesign
 │   │   ├── devicePreview.ts
 │   │   └── safeArea.ts
+│   ├── game/               # 划切玩法；参数 design.ts
 │   └── utils/haptics.ts
 ├── plugins/native-haptics/ # Swift 真源
 └── scripts/bootstrap-ios.mjs
@@ -44,7 +45,7 @@ portrait-webgpu-base/
 
 | 项 | 值 |
 |----|-----|
-| `appId` | 在 `capacitor.config.ts` 自定，避免和真机已装 App 冲突 |
+| `appId` | `com.wangzhixuan.islash.cut` |
 | `webDir` | `dist` |
 | `ios.contentInset` | `never` |
 | `ios.scrollEnabled` | `false` |

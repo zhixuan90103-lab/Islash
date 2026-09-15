@@ -4,11 +4,11 @@
 
 | 命令 | 结果 |
 |------|------|
-| `npm run dev` | http://127.0.0.1:5190/ |
+| `npm run dev` | http://127.0.0.1:5190/（占用时可换端口） |
 | `npm run build` | `tsc` 检查 + `dist/`（相对路径） |
 | `npm run cap:sync` | build + cap sync ios |
-| `npm run ios:bootstrap` | add ios + 拷插件 + 改 storyboard **和 SceneDelegate** + pbx + sync |
-| `npm run ios` | sync + open Xcode |
+| `npm run ios:bootstrap` | 首次 / 改 Swift：拷插件 + storyboard + SceneDelegate |
+| `npm run ios` | build + sync + 开 Xcode（`com.wangzhixuan.islash.cut`） |
 
 ## 2. Web 启动链
 
@@ -18,10 +18,10 @@ index.html
   → main.ts
        → applyNativeClass / safeArea
        → createRenderer(#stage)
-       → demo scene
+       → 相机 / 灯
+       → mountSlashWorld(#stage, #ui-root, scene, camera, renderer)
        → mountDevicePreview → computeStageLayout → applyStageTransform
        → watchStageLayout
-       → haptics + HUD buttons
 ```
 
 ## 3. DOM
@@ -63,6 +63,7 @@ HUD 状态行有 `plugin: true/false`。`false` = 仍在默认 `CAPBridgeViewCon
 | appId | `capacitor.config.ts` |
 | 设计分辨率 | `design.ts` + `style.css` |
 | 震动原生 | `plugins/native-haptics/*.swift` + bootstrap |
-| 启动 HUD | `index.html` + `main.ts` |
+| 启动 / 场景 | `index.html` + `main.ts` |
+| 划切规则与参数 | `src/game/design.ts` · [SLASH-DESIGN.md](./SLASH-DESIGN.md) |
 | 音效（规划） | [AUDIO.md](./AUDIO.md) |
 | 震动接线 | [HAPTICS.md](./HAPTICS.md) |

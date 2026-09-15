@@ -107,7 +107,7 @@ body {
 #ui-root {
   position: absolute;
   inset: 0;
-  z-index: 2;
+  z-index: 5;
   pointer-events: none;
   display: flex;
   flex-direction: column;
@@ -220,6 +220,94 @@ button {
 button:active {
   transform: scale(0.98);
   background: #475569;
+}
+
+.debug-panel {
+  position: relative;
+  z-index: 6;
+  pointer-events: auto;
+  touch-action: auto;
+  width: 100%;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 8px;
+}
+
+.debug-toggle,
+.debug-actions button {
+  min-height: 36px;
+  width: 100%;
+  margin: 0;
+  border-radius: 10px;
+  background: rgba(51, 65, 85, 0.95);
+}
+
+.debug-body {
+  max-height: 360px;
+  overflow: auto;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+}
+
+.debug-body[hidden] {
+  display: none !important;
+}
+
+.debug-row {
+  display: grid;
+  grid-template-columns: 64px 1fr 36px;
+  gap: 6px;
+  align-items: center;
+  font-size: 11px;
+  color: #e2e8f0;
+  margin: 4px 0;
+}
+
+.debug-sec {
+  margin: 8px 0 4px;
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.debug-ratio {
+  margin: 0 0 6px;
+  font-size: 11px;
+  color: #fbbf24;
+  font-variant-numeric: tabular-nums;
+}
+
+.debug-row input[type='range'],
+.debug-row input[type='number'] {
+  width: 100%;
+  pointer-events: auto;
+}
+
+.debug-row-num input[type='number'] {
+  min-height: 32px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  border-radius: 8px;
+  background: #0f172a;
+  color: #f8fafc;
+  padding: 4px 8px;
+  font-size: 13px;
+}
+
+.debug-val {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
+.debug-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.debug-actions button {
+  flex: 1;
 }
 
 .haptic-primary {

@@ -1,26 +1,31 @@
-# portrait-webgpu-base
+# Islash Cut
 
-**最稳健竖屏底座**：合并 **niantu** 的适配/TS/设备预览 + **three-webgpu-cap-shell** 的 Capacitor 打包、安全区、bootstrap、可验证 demo。
+竖屏 WebGPU 壳上的 **划切练习原型**：滑动=刀，盒子=木头，划穿 1 变 2。
+
+壳来自 **niantu** 适配/TS/设备预览 + **three-webgpu-cap-shell** 打包。玩法规范：[docs/SLASH-DESIGN.md](./docs/SLASH-DESIGN.md)。
 
 | 文档 | 用途 |
 |------|------|
 | [AGENTS.md](./AGENTS.md) | AI / 新窗口第一入口 |
-| [docs/ENGINEERING.md](./docs/ENGINEERING.md) | 设计决策与踩坑 |
+| [docs/SLASH-DESIGN.md](./docs/SLASH-DESIGN.md) | 划切规则、参数表、模块 |
+| [docs/SLASH-RESEARCH.md](./docs/SLASH-RESEARCH.md) | iSlash Masters / 切开几何调研 |
+| [docs/SLASH-TECH.md](./docs/SLASH-TECH.md) | 连续滑动切割的技术检索 |
+| [docs/SLASH-TRAIL.md](./docs/SLASH-TRAIL.md) | 常规刀痕拖尾 |
+| [docs/ENGINEERING.md](./docs/ENGINEERING.md) | 壳的设计决策与踩坑 |
 | [docs/ENTRYPOINTS.md](./docs/ENTRYPOINTS.md) | 入口与调用链 |
-| [docs/MERGE.md](./docs/MERGE.md) | 双工程优点对照与合并说明 |
-| [docs/AUDIO.md](./docs/AUDIO.md) | 音效方案（预解码 + 每帧一批 + 原生池） |
-| [docs/HAPTICS.md](./docs/HAPTICS.md) | 震动如何一次接对（插件注册 + 玩法层） |
+| [docs/MERGE.md](./docs/MERGE.md) | 双工程合并说明 |
+| [docs/AUDIO.md](./docs/AUDIO.md) | 音效方案（未实现） |
+| [docs/HAPTICS.md](./docs/HAPTICS.md) | 震动接线（本玩法未接刀震） |
 
 ## 30 秒上手
 
 ```bash
-cd portrait-webgpu-base
 npm install
 npm run dev
 # → http://127.0.0.1:5190/
 ```
 
-应看到：桌面手机框、紫色立方体、safe/scale 状态、右上角 **手机/Pad** 切换、底部 **点我震动**。桌面无原生马达，属正常。
+应看到：桌面手机框、紫色木板、划痕、右下角调试面板。在板上划穿 → 大块留下、小块飞出。
 
 ## 合并了什么
 
@@ -36,15 +41,15 @@ npm run dev
 
 ## iOS 真机
 
+包名 **`com.wangzhixuan.islash.cut`**，显示名 **Islash Cut**（勿与旧 hapticstest 混用）。
+
 ```bash
-npm run ios:bootstrap   # 首次
-npm run cap:open
-# Xcode: Team → 真机 → Run
+npm run ios             # 日常：build + sync + 开 Xcode
+npm run ios:bootstrap   # 仅首次或改 Swift 插件
 ```
 
-日常只改网页：`npm run cap:sync`。改 Swift / 第一次：`ios:bootstrap`（会改 SceneDelegate，否则真机 `plugin: false`）。
-
-装真机前改 `capacitor.config.ts` 的 `appId`，避免和已装 App 冲突。验收看 HUD `plugin: true` 再点 **点我震动**。
+Xcode：Signing Team → **真机**（不要 Simulator）→ Run。  
+改 Swift 必须 bootstrap，否则 Capacitor 8 默认 `CAPBridgeViewController` 不注册插件。
 
 ## 复用到新游戏
 
