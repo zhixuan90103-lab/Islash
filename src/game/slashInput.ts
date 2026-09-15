@@ -16,6 +16,17 @@ export type MeshSlashProgress = {
   enterEdge: number;
 };
 
+export type SlashIntent = {
+  locked: boolean;
+  stable: number;
+  c0: DesignPoint | null;
+  c1: DesignPoint | null;
+};
+
+export function emptyIntent(): SlashIntent {
+  return { locked: false, stable: 0, c0: null, c1: null };
+}
+
 export type SlashStroke = {
   pointerId: number;
   points: DesignPoint[];
@@ -24,6 +35,7 @@ export type SlashStroke = {
   progress: Map<number, MeshSlashProgress>;
   /** 切完后必须先回到空白，再贯穿才算下一刀。 */
   awaitBlank: boolean;
+  intent: SlashIntent;
   startedAt: number;
   lastAt: number;
 };
@@ -97,6 +109,8 @@ export function createSlashInput(
     ) => void;
     onEnd: (stroke: SlashStroke | null) => void;
     onStroke?: (stroke: SlashStroke) => void;
+    /** 仅刀痕画 ahead，不进切判定。下一 pointermove 会换一批。 */
+    onPredicted?: (points: DesignPoint[]) => void;
   },
 ): { dispose: () => void } {
   let stroke: SlashStroke | null = null;
@@ -105,6 +119,7 @@ export function createSlashInput(
     if (!stroke) return;
     const ended = stroke;
     stroke = null;
+    hooks.onPredicted?.([]);
     hooks.onEnd(ended);
   };
 
@@ -124,6 +139,7 @@ export function createSlashInput(
       slicedIds: new Set(),
       progress: new Map(),
       awaitBlank: false,
+      intent: emptyIntent(),
       startedAt: now,
       lastAt: now,
     };
@@ -165,6 +181,15 @@ export function createSlashInput(
           hooks.onMove(stroke, [stroke.points[i - 1], stroke.points[i]], stepDt);
         }
       }
+    }
+
+    if (typeof e.getPredictedEvents === 'function') {
+      const pred = e.getPredictedEvents();
+      const pts: DesignPoint[] = [];
+      for (const ev of pred) pts.push(eventToDesign(ev, stage, layout));
+      hooks.onPredicted?.(pts);
+    } else {
+      hooks.onPredicted?.([]);
     }
   };
 

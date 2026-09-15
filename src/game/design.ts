@@ -63,12 +63,52 @@ export const SLASH = {
   hullChordRatio: 0.08,
 };
 
+/**
+ * 切向意图：只驱动刀光，不改出边才切。
+ * 锁定角严、解锁角宽，避免外推一帧失败就闪灭。
+ */
+export const INTENT = {
+  /** 连续对准这么多微段才锁定。 */
+  lockSegs: 2,
+  /** 刀尖离开入点至少这么远才开始计锁定（px）。 */
+  minFromEnter: 8,
+  /** 段方向 vs 预测弦，小于此角才算对准（度）。 */
+  lockAngle: 18,
+  /** 已锁定后，大于此角才解锁（度）。 */
+  unlockAngle: 34,
+  /** 未锁定时低于此滑速不锁（px/s）。锁定后不停只因慢。 */
+  minSpeed: 30,
+  /** 1 = 画出预测弦 / 锁定弦 / 切开弦，方便对缝。 */
+  debug: 0,
+};
+
+export const INTENT_DEFAULT = { ...INTENT };
+
 /** 刀痕拖尾：点寿命（秒），刀尖宽、尾细。寿命太短则慢划几乎看不见。 */
 export const TRAIL = {
   life: 0.24,
   minDist: 0.5,
   headW: 5,
   tailW: 0,
+};
+
+/**
+ * 切缝刀光：直线、两头尖、外发光。长度 = 本次切缝弦长 + 两端甩出。
+ * 方向能贯穿时预览；出边切开后加亮再淡出。不是手指折线。
+ */
+export const FLASH = {
+  /** 切开后淡出（秒）。 */
+  life: 0.2,
+  /** 中段核心半宽（设计 px）。 */
+  coreW: 2.4,
+  /** 外发光模糊半径（设计 px），一层 shadowBlur。 */
+  glowW: 22,
+  /** 两端各甩出的固定长度（px）。 */
+  overshoot: 36,
+  /** 再按弦长比例甩出。 */
+  overshootRatio: 0.22,
+  /** 预览（未切开）相对切开的亮度。 */
+  previewAlpha: 0.72,
 };
 
 /**
@@ -101,6 +141,7 @@ export const PHYS = {
 export const WOOD_DEFAULT = { ...WOOD };
 export const PHYS_DEFAULT = { ...PHYS };
 export const TRAIL_DEFAULT = { ...TRAIL };
+export const FLASH_DEFAULT = { ...FLASH };
 
 export function bladeSpeedScale(speedPxPerSec: number): number {
   const v = Math.max(PHYS.minSliceSpeed, speedPxPerSec);

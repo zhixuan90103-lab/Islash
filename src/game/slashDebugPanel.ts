@@ -1,4 +1,8 @@
 import {
+  FLASH,
+  FLASH_DEFAULT,
+  INTENT,
+  INTENT_DEFAULT,
   PHYS,
   PHYS_DEFAULT,
   TRAIL,
@@ -40,6 +44,24 @@ const TRAIL_SLIDERS: SliderSpec[] = [
   { key: 'tailW', label: '尾宽', min: 0, max: 8, step: 0.1 },
 ];
 
+const INTENT_SLIDERS: SliderSpec[] = [
+  { key: 'lockSegs', label: '锁定段数', min: 1, max: 12, step: 1 },
+  { key: 'minFromEnter', label: '离入点', min: 0, max: 40, step: 1 },
+  { key: 'lockAngle', label: '锁定角', min: 4, max: 45, step: 1 },
+  { key: 'unlockAngle', label: '解锁角', min: 10, max: 80, step: 1 },
+  { key: 'minSpeed', label: '锁定滑速', min: 20, max: 250, step: 5 },
+  { key: 'debug', label: '对缝调试', min: 0, max: 1, step: 1 },
+];
+
+const FLASH_SLIDERS: SliderSpec[] = [
+  { key: 'life', label: '刀光寿命', min: 0.06, max: 0.8, step: 0.02 },
+  { key: 'coreW', label: '刀光芯宽', min: 0.5, max: 10, step: 0.1 },
+  { key: 'glowW', label: '泛光半径', min: 4, max: 48, step: 1 },
+  { key: 'overshoot', label: '甩出px', min: 0, max: 80, step: 1 },
+  { key: 'overshootRatio', label: '甩出比例', min: 0, max: 0.8, step: 0.02 },
+  { key: 'previewAlpha', label: '预览亮度', min: 0.2, max: 1, step: 0.02 },
+];
+
 const WOOD_FIELDS: { key: keyof typeof WOOD; label: string }[] = [
   { key: 'width', label: '长 X' },
   { key: 'height', label: '高 Y' },
@@ -73,10 +95,16 @@ export function mountSlashDebugPanel(
       <div class="debug-sliders"></div>
       <p class="debug-sec">拖尾</p>
       <div class="debug-trail"></div>
+      <p class="debug-sec">意图</p>
+      <div class="debug-intent"></div>
+      <p class="debug-sec">刀光</p>
+      <div class="debug-flash"></div>
       <div class="debug-actions">
         <button type="button" data-act="wood">重置木头</button>
         <button type="button" data-act="phys">重置物理</button>
         <button type="button" data-act="trail">重置拖尾</button>
+        <button type="button" data-act="intent">重置意图</button>
+        <button type="button" data-act="flash">重置刀光</button>
       </div>
     </div>
   `;
@@ -87,6 +115,8 @@ export function mountSlashDebugPanel(
   const woodBox = wrap.querySelector('.debug-wood') as HTMLElement;
   const list = wrap.querySelector('.debug-sliders') as HTMLElement;
   const trailList = wrap.querySelector('.debug-trail') as HTMLElement;
+  const intentList = wrap.querySelector('.debug-intent') as HTMLElement;
+  const flashList = wrap.querySelector('.debug-flash') as HTMLElement;
   const toggle = wrap.querySelector('.debug-toggle') as HTMLButtonElement;
 
   toggle.addEventListener('click', (e) => {
@@ -175,6 +205,48 @@ export function mountSlashDebugPanel(
     trailInputs.push({ spec, input, val });
   }
 
+  const intentInputs: { spec: SliderSpec; input: HTMLInputElement; val: HTMLSpanElement }[] =
+    [];
+
+  for (const spec of INTENT_SLIDERS) {
+    const row = document.createElement('label');
+    row.className = 'debug-row';
+    const cur = INTENT[spec.key as keyof typeof INTENT];
+    row.innerHTML = `<span>${spec.label}</span><input type="range" min="${spec.min}" max="${spec.max}" step="${spec.step}" /><span class="debug-val"></span>`;
+    const input = row.querySelector('input')!;
+    const val = row.querySelector('.debug-val') as HTMLSpanElement;
+    input.value = String(cur);
+    val.textContent = Number(cur).toFixed(spec.step < 1 ? 2 : 0);
+    input.addEventListener('input', () => {
+      const n = Number(input.value);
+      (INTENT as Record<string, number>)[spec.key] = n;
+      val.textContent = n.toFixed(spec.step < 1 ? 2 : 0);
+    });
+    intentList.appendChild(row);
+    intentInputs.push({ spec, input, val });
+  }
+
+  const flashInputs: { spec: SliderSpec; input: HTMLInputElement; val: HTMLSpanElement }[] =
+    [];
+
+  for (const spec of FLASH_SLIDERS) {
+    const row = document.createElement('label');
+    row.className = 'debug-row';
+    const cur = FLASH[spec.key as keyof typeof FLASH];
+    row.innerHTML = `<span>${spec.label}</span><input type="range" min="${spec.min}" max="${spec.max}" step="${spec.step}" /><span class="debug-val"></span>`;
+    const input = row.querySelector('input')!;
+    const val = row.querySelector('.debug-val') as HTMLSpanElement;
+    input.value = String(cur);
+    val.textContent = Number(cur).toFixed(spec.step < 1 ? 2 : 0);
+    input.addEventListener('input', () => {
+      const n = Number(input.value);
+      (FLASH as Record<string, number>)[spec.key] = n;
+      val.textContent = n.toFixed(spec.step < 1 ? 2 : 0);
+    });
+    flashList.appendChild(row);
+    flashInputs.push({ spec, input, val });
+  }
+
   const sync = () => {
     WOOD_FIELDS.forEach((f, i) => {
       woodInputs[i].value = String(WOOD[f.key]);
@@ -187,6 +259,16 @@ export function mountSlashDebugPanel(
     }
     for (const { spec, input, val } of trailInputs) {
       const n = TRAIL[spec.key as keyof typeof TRAIL];
+      input.value = String(n);
+      val.textContent = n.toFixed(spec.step < 1 ? 2 : 0);
+    }
+    for (const { spec, input, val } of intentInputs) {
+      const n = INTENT[spec.key as keyof typeof INTENT];
+      input.value = String(n);
+      val.textContent = n.toFixed(spec.step < 1 ? 2 : 0);
+    }
+    for (const { spec, input, val } of flashInputs) {
+      const n = FLASH[spec.key as keyof typeof FLASH];
       input.value = String(n);
       val.textContent = n.toFixed(spec.step < 1 ? 2 : 0);
     }
@@ -207,6 +289,16 @@ export function mountSlashDebugPanel(
   wrap.querySelector('[data-act="trail"]')!.addEventListener('click', (e) => {
     e.stopPropagation();
     Object.assign(TRAIL, TRAIL_DEFAULT);
+    sync();
+  });
+  wrap.querySelector('[data-act="intent"]')!.addEventListener('click', (e) => {
+    e.stopPropagation();
+    Object.assign(INTENT, INTENT_DEFAULT);
+    sync();
+  });
+  wrap.querySelector('[data-act="flash"]')!.addEventListener('click', (e) => {
+    e.stopPropagation();
+    Object.assign(FLASH, FLASH_DEFAULT);
     sync();
   });
 

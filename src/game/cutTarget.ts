@@ -2,6 +2,7 @@ import type * as THREE from 'three';
 import {
   chordLength,
   clipChordToHull,
+  clipInfiniteLineToHull,
   closestHullEdge,
   pointInConvexHull,
   projectMeshHull,
@@ -126,4 +127,33 @@ export function resolveCutBySegment(
     return null;
   }
   return null;
+}
+
+/**
+ * 已进板时，沿入点→刀尖外推整条贯穿弦。进出同边则不算意图，不画刀光。
+ */
+export function previewCutChord(
+  meshes: THREE.Mesh[],
+  camera: THREE.Camera,
+  stroke: SlashStroke,
+  tip: DesignPoint,
+): CutTarget | null {
+  if (stroke.awaitBlank) return null;
+  const trackedId = stroke.progress.size ? [...stroke.progress.keys()][0] : null;
+  if (trackedId == null) return null;
+  const st = stroke.progress.get(trackedId);
+  const mesh = meshes.find((m) => m.id === trackedId);
+  if (!st || !mesh) return null;
+  const proj = projectMeshHull(mesh, camera);
+  if (!proj) return null;
+  const dx = tip.x - st.c0.x;
+  const dy = tip.y - st.c0.y;
+  if (dx * dx + dy * dy < 4) return null;
+  const line = clipInfiniteLineToHull(st.c0, tip, proj.hull);
+  if (!line) return null;
+  const [c0, c1] = line;
+  if (!twoEdges(st.enterEdge, closestHullEdge(c1, proj.hull), c0, c1, proj.hull)) {
+    return null;
+  }
+  return { mesh, c0, c1, chord: chordLength(c0, c1) };
 }
