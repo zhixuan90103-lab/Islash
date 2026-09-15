@@ -60,11 +60,11 @@ J = mass * targetSpeed
 | friction / restitution | 0.85 / 0.04 | 摩擦 / 弹性（无地面时几乎用不上） |
 | linearDamping / angularDamping | 0.7 / 0.55 | 线/角阻尼 |
 | minSliceSpeed | 80 | 低于此按此计力度（px/s） |
-| speedRef | 500 | 滑速达到此值力度满 |
+| speedRef | 250 | 滑速达到此值力度满 |
 | impulseBase | 0.75 | 目标速度系数 |
 | kickToSpeed | 4 | 与上一项相乘得 Δv（m/s） |
 | maxSpeed / maxSpin | 4 / 6 | 踢完后线速度/角速度上限 |
-| wBlade / wNormal / wCam / wLift | 0.2 / 0.16 / 0.5 / 0.2 | 方向权重 |
+| wBlade / wNormal / wCam / wLift | 0.2 / 0.35 / 0.5 / 0.4 | 方向权重 |
 | bladeYScale | 0.4 | 刀向的 Y 缩放 |
 | maxUpFraction | 0.7 | 冲量向上分量上限 |
 | camYScale | 0.25 | 朝屏幕向量的 Y 缩放 |

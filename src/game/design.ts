@@ -45,10 +45,10 @@ export const SLASH = {
 
 /** 刀痕拖尾：点寿命（秒），刀尖宽、尾细。寿命太短则慢划几乎看不见。 */
 export const TRAIL = {
-  life: 0.5,
-  minDist: 2,
-  headW: 10,
-  tailW: 0.5,
+  life: 0.24,
+  minDist: 0.5,
+  headW: 5,
+  tailW: 0,
 };
 
 /**
@@ -63,12 +63,12 @@ export const PHYS = {
   linearDamping: 0.7,
   angularDamping: 0.55,
   minSliceSpeed: 80,
-  speedRef: 500,
+  speedRef: 250,
   impulseBase: 0.75,
   wBlade: 0.2,
-  wNormal: 0.16,
+  wNormal: 0.35,
   wCam: 0.5,
-  wLift: 0.2,
+  wLift: 0.4,
   bladeYScale: 0.4,
   maxUpFraction: 0.7,
   camYScale: 0.25,

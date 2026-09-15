@@ -65,7 +65,7 @@ https://www.flutterclutter.dev/flutter/tutorials/flutter-game-tutorial-fruit-nin
 
 | | 本仓现在 | 常规 Trail |
 |--|----------|------------|
-| 截断 | **已改**：点寿命 `TRAIL.life`（默认 0.18s） | 点寿命 0.1–0.3s |
+| 截断 | **已改**：点寿命 `TRAIL.life`（默认 0.24s） | 点寿命 0.1–0.3s |
 | 停住 | 旧点过期，尾巴收 | 尾巴收掉 |
 | 抬手 | `end()` 停采样，残影 drain | 残影淡出 |
 | 几何 | canvas 填左右轮廓 | 同款丝带，或 GPU Trail |
