@@ -267,7 +267,7 @@ Linecast 是「碰到即切」。板要「划穿」：对该 mesh **累计 PE→
 在 §11 上追加：
 
 7. 刀面优先 `Cross(刀向, 相机朝向)`，三点法只作备选；`|n|² < ε` 再 `Cross(刀向, camera.up)`。  
-8. 几何切开：只切 `userData.profile`，两块再竖直挤出 + 正面平行内收倒角。不要 CSG、不要锥台、不要截 miter。规范见 [SLASH-DESIGN.md](./SLASH-DESIGN.md)「几何」。  
+8. 几何切开：只切 `userData.profile`，两块再竖直挤出 + **按边**倒角。一条边失败只影响那条边。不要 CSG、不要锥台、不要整块降 inset。规范见 [SLASH-DESIGN.md](./SLASH-DESIGN.md)「几何」。  
 9. `pointercancel` = 收刀，不清场景。  
 10. Linecast 式「碰到就切」只适合飞出的水果；钉住的木走累计划穿。
 

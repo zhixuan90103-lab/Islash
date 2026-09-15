@@ -15,6 +15,11 @@ export const WOOD_SHAPE = {
    * 切的是 2D 轮廓，不是 3D。不要改成整板锥台。
    */
   frontInset: 0.028,
+  /**
+   * 尖角 miter 长度上限（× frontInset）。超过则该角改截断，其它边仍用原 inset。
+   * 矩形 90° 的 miter ≈ 1.41，默认 2 不会动未切的边。
+   */
+  miterLimit: 2,
 };
 
 /** 倒角 XY 宽度；Z 向用同一值，斜角约 45°。 */
