@@ -173,6 +173,18 @@ export function clipChordToHull(
   return clipLineToHull(a, b, hull, 0, 1);
 }
 
+/**
+ * origin 可在包内：沿 origin→tip 向后延伸到入边，向前最多到 tip。
+ * 夹缝起点用这个，避免从板中间起笔。
+ */
+export function clipBackToEnter(
+  origin: DesignPoint,
+  tip: DesignPoint,
+  hull: ProjPoly,
+): HullChord | null {
+  return clipLineToHull(origin, tip, hull, Number.NEGATIVE_INFINITY, 1);
+}
+
 /** Infinite line through a,b clipped to hull. Direction stays a→b. */
 export function clipInfiniteLineToHull(
   a: DesignPoint,

@@ -1,7 +1,11 @@
 import * as THREE from 'three';
 import { applyBladeImpulse, pieceVolume } from './bladeForce';
-import { previewCutChord, resolveCutBySegment } from './cutTarget';
-import { resetSlashIntent, updateSlashIntent } from './slashIntent';
+import { crackAlongStroke, previewCutChord, resolveCutBySegment } from './cutTarget';
+import {
+  headingAngleDeg,
+  resetSlashIntent,
+  updateSlashIntent,
+} from './slashIntent';
 import { mountSlashDebugPanel } from './slashDebugPanel';
 import { createSlashOverlay } from './slashDebug';
 import { cutMeshBySlash, prepareCuttable } from './slashCut';
@@ -12,6 +16,7 @@ import {
   type SlashStroke,
 } from './slashInput';
 import { createSlashPhysics } from './slashPhysics';
+import { FLASH } from './design';
 import { createWoodSet } from './wood';
 import type { StageLayout } from '../adapt/design';
 
@@ -38,6 +43,9 @@ export async function mountSlashWorld(
   let lastGeom: { c0: DesignPoint; c1: DesignPoint } | null = null;
   let lastLocked: { c0: DesignPoint; c1: DesignPoint } | null = null;
   let lastCommit: { c0: DesignPoint; c1: DesignPoint } | null = null;
+  let flashHot = false;
+  let earlyFlashed = false;
+  let aimStable = 0;
 
   const pushIntentDebug = (stroke: SlashStroke) => {
     overlay.setIntentDebug({
@@ -128,7 +136,11 @@ export async function mountSlashWorld(
     born.add(keep.id);
     born.add(drop.id);
     lastCommit = { c0: best.c0, c1: best.c1 };
-    overlay.flash(best.c0, best.c1);
+    overlay.freezeFlash();
+    if (!earlyFlashed) overlay.flash(best.c0, best.c1, false);
+    earlyFlashed = false;
+    flashHot = false;
+    aimStable = 0;
     pushIntentDebug(stroke);
     report('已切开');
     return true;
@@ -149,6 +161,9 @@ export async function mountSlashWorld(
         lastGeom = null;
         lastLocked = null;
         lastCommit = null;
+        flashHot = false;
+        earlyFlashed = false;
+        aimStable = 0;
         overlay.begin();
       }
       if (tip) overlay.push(tip);
@@ -159,6 +174,15 @@ export async function mountSlashWorld(
     onMove: (stroke, lastSeg, dtSec) => {
       overlay.push(lastSeg[1]);
       const cut = tryCutSeg(stroke, lastSeg, dtSec);
+      const crack = crackAlongStroke(
+        wood.cuttables,
+        camera,
+        stroke,
+        lastSeg[1],
+        lastSeg[0],
+      );
+      if (crack) overlay.setCrack(crack.c0, crack.c1);
+      else overlay.setCrack(null);
       if (!cut) {
         const geom = previewCutChord(
           wood.cuttables,
@@ -169,8 +193,28 @@ export async function mountSlashWorld(
         const locked = updateSlashIntent(stroke, geom, lastSeg, dtSec);
         lastGeom = geom;
         lastLocked = locked;
-        if (locked) overlay.setPreview(locked.c0, locked.c1);
-        else overlay.setPreview(null);
+        const speed = segmentSpeedPxPerSec(lastSeg[0], lastSeg[1], dtSec);
+        if (locked) {
+          const ang = headingAngleDeg(
+            lastSeg[1].x - lastSeg[0].x,
+            lastSeg[1].y - lastSeg[0].y,
+            locked.c1.x - locked.c0.x,
+            locked.c1.y - locked.c0.y,
+          );
+          if (ang <= FLASH.aimAngle) aimStable += 1;
+          else aimStable = 0;
+          const aimed = aimStable >= FLASH.aimSegs && speed >= FLASH.minSpeed;
+          if (aimed) flashHot = true;
+        } else {
+          flashHot = false;
+          aimStable = 0;
+        }
+        if (locked && flashHot && !earlyFlashed) {
+          earlyFlashed = true;
+          const chord = crack ?? locked;
+          overlay.flash(chord.c0, chord.c1, true);
+        }
+        overlay.setPreview(null);
         pushIntentDebug(stroke);
       }
     },

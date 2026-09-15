@@ -54,6 +54,8 @@ const INTENT_SLIDERS: SliderSpec[] = [
 ];
 
 const FLASH_SLIDERS: SliderSpec[] = [
+  { key: 'minSpeed', label: '刀光滑速', min: 40, max: 400, step: 10 },
+  { key: 'minSpeedOff', label: '刀光熄速', min: 20, max: 300, step: 10 },
   { key: 'life', label: '刀光寿命', min: 0.06, max: 0.8, step: 0.02 },
   { key: 'coreW', label: '刀光芯宽', min: 0.5, max: 10, step: 0.1 },
   { key: 'glowW', label: '泛光半径', min: 4, max: 48, step: 1 },
@@ -86,8 +88,8 @@ export function mountSlashDebugPanel(
   const wrap = document.createElement('section');
   wrap.className = 'debug-panel';
   wrap.innerHTML = `
-    <button type="button" class="debug-toggle">收起参数</button>
-    <div class="debug-body">
+    <button type="button" class="debug-toggle">调试参数</button>
+    <div class="debug-body" hidden>
       <p class="debug-sec">木头乘数（1 = 设计形体 ${WOOD_SHAPE.width}×${WOOD_SHAPE.height}×${WOOD_SHAPE.depth}）</p>
       <p class="debug-ratio" id="wood-ratio"></p>
       <div class="debug-wood"></div>

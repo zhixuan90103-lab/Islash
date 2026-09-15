@@ -1,7 +1,7 @@
 # 连续滑动切割 — 技术检索
 
 玩法结论：[SLASH-RESEARCH.md §5](./SLASH-RESEARCH.md)。  
-本文只写 **怎么实现**：刃活着、段检测、划中换网格。栈：本仓 Pointer Events + 设计坐标 + **2D 轮廓切开**（`slashCut.ts` / `wood.ts`）+ Rapier。网格做法见 [SLASH-DESIGN.md](./SLASH-DESIGN.md)「几何」。
+本文只写 **怎么实现**：刃活着、段检测、划中换网格。栈：本仓 Pointer Events + 设计坐标 + **2D 轮廓切开**（`slashCut.ts` / `woodProfile.ts` / `woodChamfer.ts`）+ Rapier。网格做法见 [SLASH-DESIGN.md](./SLASH-DESIGN.md)「几何」。
 
 ## 1. 参考实现（已读源）
 
@@ -70,7 +70,7 @@ Unity 用移动的 trigger 球扫过水果。WebGPU 没有等价的每帧物理 
 | 折线 + 插值 + coalesced | `slashInput.ts` |
 | `onMove(stroke, lastSeg)` | 上一采样 → 刀尖（插值后的微段） |
 | 轮廓裁剪、射线 | `slashHit.ts` |
-| 2D 轮廓切开 + 倒角挤出 | `slashCut.ts` / `wood.ts` |
+| 2D 轮廓切开 + 半平面内收倒角 | `slashCut.ts` / `woodProfile.ts` / `woodChamfer.ts` |
 | 换网格 + Rapier | `slashWorld.replaceCut` / `slashPhysics` |
 
 ### 必须改
@@ -267,7 +267,7 @@ Linecast 是「碰到即切」。板要「划穿」：对该 mesh **累计 PE→
 在 §11 上追加：
 
 7. 刀面优先 `Cross(刀向, 相机朝向)`，三点法只作备选；`|n|² < ε` 再 `Cross(刀向, camera.up)`。  
-8. 几何切开：只切 `userData.profile`，两块再竖直挤出 + **按边**倒角。一条边失败只影响那条边。不要 CSG、不要锥台、不要整块降 inset。规范见 [SLASH-DESIGN.md](./SLASH-DESIGN.md)「几何」。  
+8. 几何切开：只切 `userData.profile`，两块再竖直挤出 + 半平面内收倒角。锐角丢掉内顶点并补面封口。不要 CSG、不要锥台、不要整块降 inset。规范见 [SLASH-DESIGN.md](./SLASH-DESIGN.md)「几何」。  
 9. `pointercancel` = 收刀，不清场景。  
 10. Linecast 式「碰到就切」只适合飞出的水果；钉住的木走累计划穿。
 

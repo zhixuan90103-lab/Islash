@@ -1,6 +1,7 @@
 import type * as THREE from 'three';
 import {
   chordLength,
+  clipBackToEnter,
   clipChordToHull,
   clipInfiniteLineToHull,
   closestHullEdge,
@@ -102,10 +103,14 @@ export function resolveCutBySegment(
     const insideB = pointInConvexHull(b, proj.hull);
     const entered = !!clipped || insideB;
     if (!entered) continue;
-    if (!fromOutside && stroke.slicedIds.size > 0) continue;
+    if (!fromOutside) continue;
 
-    const c0 = clipped ? clipped.c0 : b;
-    const c1 = clipped ? clipped.c1 : b;
+    const inf = clipped
+      ? null
+      : clipInfiniteLineToHull(a, b, proj.hull);
+    const c0 = clipped?.c0 ?? inf?.[0];
+    if (!c0) continue;
+    const c1 = clipped?.c1 ?? b;
     const enterEdge = clipped
       ? clipped.enterEdge
       : closestHullEdge(c0, proj.hull);
@@ -156,4 +161,41 @@ export function previewCutChord(
     return null;
   }
   return { mesh, c0, c1, chord: chordLength(c0, c1) };
+}
+
+/** 夹缝：入点 → 当前刀尖，裁在凸包内。切完仍在块内时也能跟手。 */
+export function crackAlongStroke(
+  meshes: THREE.Mesh[],
+  camera: THREE.Camera,
+  stroke: SlashStroke,
+  tip: DesignPoint,
+  from?: DesignPoint,
+): { c0: DesignPoint; c1: DesignPoint } | null {
+  const trackedId = stroke.progress.size ? [...stroke.progress.keys()][0] : null;
+  if (trackedId != null) {
+    const st = stroke.progress.get(trackedId);
+    const mesh = meshes.find((m) => m.id === trackedId);
+    if (st && mesh) {
+      const proj = projectMeshHull(mesh, camera);
+      if (proj) {
+        const hit = clipBackToEnter(st.c0, tip, proj.hull);
+        if (hit && chordLength(hit.c0, hit.c1) >= 1) {
+          return { c0: hit.c0, c1: hit.c1 };
+        }
+      }
+    }
+  }
+
+  if (stroke.slicedIds.size === 0) return null;
+  const origin = from ?? tip;
+  for (const mesh of meshes) {
+    if (stroke.slicedIds.has(mesh.id)) continue;
+    const proj = projectMeshHull(mesh, camera);
+    if (!proj || !pointInConvexHull(tip, proj.hull)) continue;
+    const hit = clipBackToEnter(origin, tip, proj.hull);
+    if (hit && chordLength(hit.c0, hit.c1) >= 1) {
+      return { c0: hit.c0, c1: hit.c1 };
+    }
+  }
+  return null;
 }

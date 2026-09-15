@@ -11,7 +11,7 @@ function hypot(dx: number, dy: number): number {
   return Math.hypot(dx, dy);
 }
 
-function angleDeg(
+export function headingAngleDeg(
   ax: number,
   ay: number,
   bx: number,
@@ -45,7 +45,7 @@ export function updateSlashIntent(
     return it.locked && it.c0 && it.c1 ? { c0: it.c0, c1: it.c1 } : null;
   }
 
-  const ang = angleDeg(
+  const ang = headingAngleDeg(
     seg[1].x - seg[0].x,
     seg[1].y - seg[0].y,
     preview.c1.x - preview.c0.x,

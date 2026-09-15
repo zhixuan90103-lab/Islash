@@ -18,7 +18,7 @@ export function prepareCuttable(mesh: THREE.Mesh): void {
   mesh.userData.cuttable = true;
 }
 
-/** @deprecated 历史名，实际是竖挤+按边倒角，不是锥台。 */
+/** @deprecated 历史名，实际是竖挤 + 半平面内收倒角，不是锥台。 */
 export function createFrustumGeometry(
   profile: Poly2[],
   depth: number,

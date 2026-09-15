@@ -16,22 +16,34 @@ function dist(a: DesignPoint, b: DesignPoint): number {
   return Math.hypot(b.x - a.x, b.y - a.y);
 }
 
-type FlashSeg = { c0: DesignPoint; c1: DesignPoint; born: number; preview: boolean };
+type FlashSeg = {
+  c0: DesignPoint;
+  c1: DesignPoint;
+  born: number;
+  follow: boolean;
+};
 
-function extendChord(
+/** 方向跟夹缝，长度拉到 spanMin 再甩出出端。 */
+function flashAxis(
   c0: DesignPoint,
   c1: DesignPoint,
 ): [DesignPoint, DesignPoint] {
   const dx = c1.x - c0.x;
   const dy = c1.y - c0.y;
   const len = Math.hypot(dx, dy) || 1;
-  const extra = FLASH.overshoot + FLASH.overshootRatio * len;
   const ux = dx / len;
   const uy = dy / len;
+  const span =
+    Math.max(len, FLASH.spanMin) * (1 + FLASH.overshootRatio) + FLASH.overshoot;
+  const back = FLASH.overshootBack;
   return [
-    { x: c0.x - ux * extra, y: c0.y - uy * extra },
-    { x: c1.x + ux * extra, y: c1.y + uy * extra },
+    { x: c0.x - ux * back, y: c0.y - uy * back },
+    { x: c0.x + ux * span, y: c0.y + uy * span },
   ];
+}
+
+function lerpPt(a: DesignPoint, b: DesignPoint, t: number): DesignPoint {
+  return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
 }
 
 function paintSpindle(
@@ -44,10 +56,10 @@ function paintSpindle(
   const dx = b.x - a.x;
   const dy = b.y - a.y;
   const len = Math.hypot(dx, dy);
-  if (len < 1) return;
+  if (len < 0.5) return;
   const nx = -dy / len;
   const ny = dx / len;
-  const steps = 12;
+  const steps = 14;
   ctx.beginPath();
   for (let i = 0; i <= steps; i++) {
     const t = i / steps;
@@ -72,9 +84,11 @@ export function createSlashOverlay(stage: HTMLElement): {
   begin: () => void;
   push: (p: DesignPoint) => void;
   setPreview: (c0: DesignPoint | null, c1?: DesignPoint) => void;
+  setCrack: (c0: DesignPoint | null, c1?: DesignPoint) => void;
   setPredicted: (points: DesignPoint[]) => void;
   setIntentDebug: (info: IntentDebug | null) => void;
-  flash: (c0: DesignPoint, c1: DesignPoint) => void;
+  flash: (c0: DesignPoint, c1: DesignPoint, follow?: boolean) => void;
+  freezeFlash: () => void;
   end: () => void;
   step: (now?: number) => void;
   clear: () => void;
@@ -86,7 +100,7 @@ export function createSlashOverlay(stage: HTMLElement): {
   const ctx = canvas.getContext('2d')!;
   const pts: TrailPt[] = [];
   const flashes: FlashSeg[] = [];
-  let preview: { c0: DesignPoint; c1: DesignPoint } | null = null;
+  let crack: { c0: DesignPoint; c1: DesignPoint } | null = null;
   let predicted: DesignPoint[] = [];
   let intentDebug: IntentDebug | null = null;
   let emitting = false;
@@ -116,19 +130,96 @@ export function createSlashOverlay(stage: HTMLElement): {
     drain(now);
 
     const trailLifeMs = TRAIL.life * 1000;
+    const flashLifeMs = FLASH.life * 1000;
+    const dpr = canvas.width / DESIGN_WIDTH;
+
+    if (crack) {
+      const dx = crack.c1.x - crack.c0.x;
+      const dy = crack.c1.y - crack.c0.y;
+      const len = Math.hypot(dx, dy);
+      if (len >= 1) {
+        const nx = -dy / len;
+        const ny = dx / len;
+        const startW = Math.min(
+          FLASH.crackWMax,
+          FLASH.crackW0 + len * FLASH.crackGrow,
+        );
+        const w0 = startW * 0.5;
+        const w1 = FLASH.crackW * 0.5;
+        ctx.save();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = 'rgba(18, 8, 4, 0.55)';
+        ctx.beginPath();
+        ctx.moveTo(crack.c0.x + nx * w0, crack.c0.y + ny * w0);
+        ctx.lineTo(crack.c1.x + nx * w1, crack.c1.y + ny * w1);
+        ctx.lineTo(crack.c1.x - nx * w1, crack.c1.y - ny * w1);
+        ctx.lineTo(crack.c0.x - nx * w0, crack.c0.y - ny * w0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    const drawFlash = (c0: DesignPoint, c1: DesignPoint, age: number) => {
+      if (!FLASH.show || age <= 0 || age >= 1) return;
+      const [a, b] = flashAxis(c0, c1);
+      const grow = Math.max(0.12, Math.min(0.85, FLASH.grow));
+      let lenT = 1;
+      let fade = 1;
+      if (age < grow) {
+        const t = age / grow;
+        lenT = 1 - (1 - t) * (1 - t);
+      } else {
+        const t = (age - grow) / Math.max(0.08, 1 - grow);
+        fade = (1 - t) * (1 - t);
+      }
+      const u0 = 0;
+      const u1 = Math.max(0.06, lenT);
+      const halfW =
+        (FLASH.coreW * (1 - lenT) + FLASH.coreWMin * lenT) * fade;
+      if (u1 - u0 < 0.02 || halfW < 0.08 || fade < 0.03) return;
+      const tail = lerpPt(a, b, u0);
+      const head = lerpPt(a, b, u1);
+      ctx.save();
+      ctx.shadowColor = `rgba(210, 235, 255, ${0.85 * fade})`;
+      ctx.shadowBlur = FLASH.glowW * dpr * Math.max(0.2, fade);
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+      paintSpindle(
+        ctx,
+        tail,
+        head,
+        halfW,
+        `rgba(255, 255, 255, ${0.94 * fade})`,
+      );
+      ctx.restore();
+    };
+
+    for (let i = flashes.length - 1; i >= 0; i--) {
+      const f = flashes[i];
+      const age = (now - f.born) / flashLifeMs;
+      if (age >= 1) {
+        flashes.splice(i, 1);
+        continue;
+      }
+      const c0 = f.follow && crack ? crack.c0 : f.c0;
+      const c1 = f.follow && crack ? crack.c1 : f.c1;
+      drawFlash(c0, c1, age);
+    }
+
     const widthAt = (p: TrailPt) => {
       const age = Math.max(0, Math.min(1, (now - p.t) / trailLifeMs));
       const k = 1 - age;
       return TRAIL.tailW + (TRAIL.headW - TRAIL.tailW) * k * k;
     };
 
-    if (pts.length === 1 && emitting) {
+    if (TRAIL.show && pts.length === 1 && emitting) {
       const head = pts[0];
       ctx.beginPath();
       ctx.arc(head.x, head.y, TRAIL.headW * 0.4, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(255,255,255,0.9)';
       ctx.fill();
-    } else if (pts.length >= 2) {
+    } else if (TRAIL.show && pts.length >= 2) {
       const head = pts[pts.length - 1];
       const n = pts.length - 1;
       const left: DesignPoint[] = [];
@@ -171,52 +262,16 @@ export function createSlashOverlay(stage: HTMLElement): {
         ctx.fill();
       }
 
-      if (predicted.length > 0) {
+      if (predicted.length > 0 && TRAIL.predictAlpha > 0.01) {
         ctx.beginPath();
         ctx.moveTo(head.x, head.y);
         for (const p of predicted) ctx.lineTo(p.x, p.y);
-        ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+        ctx.strokeStyle = `rgba(255,255,255,${TRAIL.predictAlpha})`;
         ctx.lineWidth = Math.max(1, TRAIL.headW * 0.35);
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         ctx.stroke();
       }
-    }
-
-    const flashLifeMs = FLASH.life * 1000;
-    const dpr = canvas.width / DESIGN_WIDTH;
-    const drawFlash = (c0: DesignPoint, c1: DesignPoint, alpha: number) => {
-      if (alpha <= 0.01) return;
-      const [a, b] = extendChord(c0, c1);
-      ctx.save();
-      ctx.shadowColor = `rgba(210, 235, 255, ${0.9 * alpha})`;
-      ctx.shadowBlur = FLASH.glowW * dpr;
-      ctx.shadowOffsetX = 0;
-      ctx.shadowOffsetY = 0;
-      paintSpindle(ctx, a, b, FLASH.coreW, `rgba(255, 255, 255, ${0.92 * alpha})`);
-      ctx.restore();
-    };
-
-    if (preview) {
-      ctx.save();
-      ctx.strokeStyle = 'rgba(50, 28, 12, 0.55)';
-      ctx.lineWidth = 2;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(preview.c0.x, preview.c0.y);
-      ctx.lineTo(preview.c1.x, preview.c1.y);
-      ctx.stroke();
-      ctx.restore();
-      drawFlash(preview.c0, preview.c1, FLASH.previewAlpha);
-    }
-    for (let i = flashes.length - 1; i >= 0; i--) {
-      const f = flashes[i];
-      const k = 1 - (now - f.born) / flashLifeMs;
-      if (k <= 0) {
-        flashes.splice(i, 1);
-        continue;
-      }
-      drawFlash(f.c0, f.c1, k * k);
     }
 
     if (INTENT.debug) {
@@ -282,15 +337,19 @@ export function createSlashOverlay(stage: HTMLElement): {
 
   const begin = () => {
     pts.length = 0;
-    preview = null;
+    crack = null;
     predicted = [];
     intentDebug = null;
     emitting = true;
     wipe();
   };
 
-  const setPreview = (c0: DesignPoint | null, c1?: DesignPoint) => {
-    preview = c0 && c1 ? { c0, c1 } : null;
+  const setPreview = (_c0: DesignPoint | null, _c1?: DesignPoint) => {
+    /* 刀光改为一次性扫过，不再钉在切缝上。 */
+  };
+
+  const setCrack = (c0: DesignPoint | null, c1?: DesignPoint) => {
+    crack = c0 && c1 ? { c0, c1 } : null;
   };
 
   const setPredicted = (points: DesignPoint[]) => {
@@ -301,9 +360,19 @@ export function createSlashOverlay(stage: HTMLElement): {
     intentDebug = info;
   };
 
-  const flash = (c0: DesignPoint, c1: DesignPoint) => {
-    preview = null;
-    flashes.push({ c0, c1, born: performance.now(), preview: false });
+  const flash = (c0: DesignPoint, c1: DesignPoint, follow = false) => {
+    flashes.length = 0;
+    flashes.push({ c0, c1, born: performance.now(), follow });
+  };
+
+  const freezeFlash = () => {
+    for (const f of flashes) {
+      if (f.follow && crack) {
+        f.c0 = crack.c0;
+        f.c1 = crack.c1;
+      }
+      f.follow = false;
+    }
   };
 
   const push = (p: DesignPoint) => {
@@ -321,14 +390,14 @@ export function createSlashOverlay(stage: HTMLElement): {
 
   const end = () => {
     emitting = false;
-    preview = null;
+    crack = null;
     predicted = [];
   };
 
   const clear = () => {
     pts.length = 0;
     flashes.length = 0;
-    preview = null;
+    crack = null;
     predicted = [];
     intentDebug = null;
     emitting = false;
@@ -344,9 +413,11 @@ export function createSlashOverlay(stage: HTMLElement): {
     begin,
     push,
     setPreview,
+    setCrack,
     setPredicted,
     setIntentDebug,
     flash,
+    freezeFlash,
     end,
     step,
     clear,

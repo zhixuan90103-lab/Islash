@@ -51,7 +51,7 @@
 7. **改 Swift 改 `plugins/native-haptics/`** 再 `ios:bootstrap`；震动接线见 `docs/HAPTICS.md`。Capacitor 8 的 `SceneDelegate` 必须 `rootViewController = BridgeViewController()`（默认 `CAPBridgeViewController` 不会注册插件）。不要用 JS `prepare()` 判断是否接上；真机 HUD 看 `plugin: true` + 点「点我震动」。  
 8. **无 WebGPU 则明确失败**，不静默 WebGL  
 9. **玩法参数只改 `src/game/design.ts`**（或调试面板）。砍飞必须质量归一（`J = mass * Δv`），禁止固定冲量打所有块。  
-10. **切开只切 2D 轮廓再竖直挤出 + 按边倒角**（`userData.profile`）。禁止锥台、禁止 3D CSG、禁止整块缩小 inset 当失败兜底。细则：[docs/SLASH-DESIGN.md](docs/SLASH-DESIGN.md)「几何」。  
+10. **切开只切 2D 轮廓再竖直挤出 + 半平面内收倒角**（`userData.profile`）。块要封口。禁止锥台、禁止 3D CSG、禁止整块缩小 inset。细则：[docs/SLASH-DESIGN.md](docs/SLASH-DESIGN.md)「几何」。  
 11. **iOS**：`appId` = `com.wangzhixuan.islash.cut`，显示名 Islash Cut；真机不要 Simulator。  
 
 ## 命令
