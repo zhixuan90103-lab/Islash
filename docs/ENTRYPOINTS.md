@@ -18,8 +18,8 @@ index.html
   → main.ts
        → applyNativeClass / safeArea
        → createRenderer(#stage)
-       → 相机 / 灯
-       → mountSlashWorld(#stage, #ui-root, scene, camera, renderer)
+       → 水色背景（backdrop.ts）/ 相机 / VIEW 灯光
+       → mountSlashWorld(#stage, scene, camera, getLayout)
        → mountDevicePreview → computeStageLayout → applyStageTransform
        → watchStageLayout
 ```
@@ -65,5 +65,7 @@ HUD 状态行有 `plugin: true/false`。`false` = 仍在默认 `CAPBridgeViewCon
 | 震动原生 | `plugins/native-haptics/*.swift` + bootstrap |
 | 启动 / 场景 | `index.html` + `main.ts` |
 | 划切规则与参数 | `src/game/design.ts` · [SLASH-DESIGN.md](./SLASH-DESIGN.md) |
+| 木头网格 / 倒角 | `src/game/wood.ts` · 同上文档「几何」 |
+| 背景 / 灯光 / 木色 | `VIEW` + `src/game/backdrop.ts` + `src/main.ts` |
 | 音效（规划） | [AUDIO.md](./AUDIO.md) |
 | 震动接线 | [HAPTICS.md](./HAPTICS.md) |

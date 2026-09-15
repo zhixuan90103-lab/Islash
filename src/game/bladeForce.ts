@@ -86,6 +86,17 @@ export function applyBladeImpulse(
 }
 
 export function pieceVolume(m: THREE.Mesh): number {
+  const profile = m.userData.profile as { x: number; y: number }[] | undefined;
+  const depth = m.userData.depth as number | undefined;
+  if (profile && profile.length >= 3 && depth) {
+    let a = 0;
+    for (let i = 0; i < profile.length; i++) {
+      const p = profile[i];
+      const q = profile[(i + 1) % profile.length];
+      a += p.x * q.y - q.x * p.y;
+    }
+    return Math.abs(a * 0.5) * depth;
+  }
   m.geometry.computeBoundingBox();
   const bb = m.geometry.boundingBox;
   if (!bb) return 0;

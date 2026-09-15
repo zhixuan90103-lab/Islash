@@ -1,7 +1,7 @@
 # 连续滑动切割 — 技术检索
 
 玩法结论：[SLASH-RESEARCH.md §5](./SLASH-RESEARCH.md)。  
-本文只写 **怎么实现**：刃活着、段检测、划中换网格。栈：本仓 Pointer Events + 设计坐标 + 自写剖分 + Rapier。
+本文只写 **怎么实现**：刃活着、段检测、划中换网格。栈：本仓 Pointer Events + 设计坐标 + **2D 轮廓切开**（`slashCut.ts` / `wood.ts`）+ Rapier。网格做法见 [SLASH-DESIGN.md](./SLASH-DESIGN.md)「几何」。
 
 ## 1. 参考实现（已读源）
 
@@ -35,7 +35,7 @@ StopSlice   : collider.off              // 抬手只收刀
 - `ConvexObjectBreaker` 文档：切开得到的子物体 **不必再** `prepareBreakableObject`，可立刻再 `cutByPlane`。  
   https://threejs.org/docs/#examples/en/misc/ConvexObjectBreaker
 - 官方 `physics_ammo_break.html`：同一帧删旧体、加碎片刚体。
-- three-pinata：`slice` / `sliceWorld` 返回新 mesh 数组，调用方可递归。本仓用自写三角剖分，语义相同：输出两块新 BufferGeometry。
+- three-pinata：`slice` / `sliceWorld` 返回新 mesh 数组。本仓对凸板用 **2D 轮廓切一刀再挤出**，输出两块新 BufferGeometry，语义仍是 1 变 2。
 
 ### 1.4 输入精度
 
@@ -68,9 +68,9 @@ Unity 用移动的 trigger 球扫过水果。WebGPU 没有等价的每帧物理 
 | 现成 | 文件 |
 |------|------|
 | 折线 + 插值 + coalesced | `slashInput.ts` |
-| `onMove(stroke, lastSeg)` | **现码 lastSeg = [points[0], tip]，不是上一采样→刀尖** |
+| `onMove(stroke, lastSeg)` | 上一采样 → 刀尖（插值后的微段） |
 | 轮廓裁剪、射线 | `slashHit.ts` |
-| 世界剖分 | `slashCut.ts` |
+| 2D 轮廓切开 + 倒角挤出 | `slashCut.ts` / `wood.ts` |
 | 换网格 + Rapier | `slashWorld.replaceCut` / `slashPhysics` |
 
 ### 必须改
@@ -267,7 +267,7 @@ Linecast 是「碰到即切」。板要「划穿」：对该 mesh **累计 PE→
 在 §11 上追加：
 
 7. 刀面优先 `Cross(刀向, 相机朝向)`，三点法只作备选；`|n|² < ε` 再 `Cross(刀向, camera.up)`。  
-8. 几何切开继续用现有三角剖分（EzySlice 同类：三角对平面），不必换库。  
+8. 几何切开：只切 `userData.profile`，两块再竖直挤出 + 正面平行内收倒角。不要 CSG、不要锥台、不要截 miter。规范见 [SLASH-DESIGN.md](./SLASH-DESIGN.md)「几何」。  
 9. `pointercancel` = 收刀，不清场景。  
 10. Linecast 式「碰到就切」只适合飞出的水果；钉住的木走累计划穿。
 

@@ -8,7 +8,7 @@
 
 **TypeScript + Three.js WebGPU + Vite + Capacitor iOS** 竖屏。  
 设计空间 **390×844** contain letterbox；`base: './'`。  
-滑动=刀，盒子=木头；划穿 1 变 2，大块留下，小块按刀向飞出。
+滑动=刀，板=木头；划穿 1 变 2，大块留下，小块按刀向飞出。
 
 ## 入口地图
 
@@ -27,6 +27,7 @@
 | iOS 注入 | `scripts/bootstrap-ios.mjs` |
 | 音效方案（未实现） | `docs/AUDIO.md` |
 | 划切规范 | `docs/SLASH-DESIGN.md`（参数 `src/game/design.ts`） |
+| 水色背景 | `src/game/backdrop.ts` |
 | 划切调研 | `docs/SLASH-RESEARCH.md` |
 | 连续切技术 | `docs/SLASH-TECH.md` |
 
@@ -50,7 +51,8 @@
 7. **改 Swift 改 `plugins/native-haptics/`** 再 `ios:bootstrap`；震动接线见 `docs/HAPTICS.md`。Capacitor 8 的 `SceneDelegate` 必须 `rootViewController = BridgeViewController()`（默认 `CAPBridgeViewController` 不会注册插件）。不要用 JS `prepare()` 判断是否接上；真机 HUD 看 `plugin: true` + 点「点我震动」。  
 8. **无 WebGPU 则明确失败**，不静默 WebGL  
 9. **玩法参数只改 `src/game/design.ts`**（或调试面板）。砍飞必须质量归一（`J = mass * Δv`），禁止固定冲量打所有块。  
-10. **iOS**：`appId` = `com.wangzhixuan.islash.cut`，显示名 Islash Cut；真机不要 Simulator。  
+10. **切开只切 2D 轮廓再竖直挤出 + 正面等宽倒角**（`userData.profile`）。禁止锥台、禁止对 3D 倒角网格做 CSG。细则：[docs/SLASH-DESIGN.md](docs/SLASH-DESIGN.md)「几何」。  
+11. **iOS**：`appId` = `com.wangzhixuan.islash.cut`，显示名 Islash Cut；真机不要 Simulator。  
 
 ## 命令
 
@@ -78,5 +80,6 @@ npm run ios           # build + sync + 开 Xcode
 
 - 关卡 / 分数 / 连击 / 其它手势族  
 - 伪造「重侧下垂」力矩  
+- 整板锥台、3D CSG 切倒角网格  
 - Android（可后加）  
 - WebGL 静默回退  

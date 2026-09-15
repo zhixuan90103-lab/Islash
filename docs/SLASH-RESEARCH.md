@@ -1,6 +1,7 @@
 # 划切操作调研结论
 
-本周主题：划切。调研范围曾写「不做物理」；**工程已加基础 Rapier**，落地规则以 [SLASH-DESIGN.md](./SLASH-DESIGN.md) 为准。仍不做关卡、胜负、分数、其他手势族。
+本周主题：划切。调研范围曾写「不做物理」；**工程已加基础 Rapier**。  
+**落地规则、网格、外观以 [SLASH-DESIGN.md](./SLASH-DESIGN.md) 为准。** 下文「BoxGeometry 三角剖分 / ConvexObjectBreaker」是调研当时的方案，**不要再落地**。当前是 **2D 轮廓切开 + 竖直挤出 + 正面平行内收倒角**（不是锥台，切的不是 3D 网格）。仍不做关卡、胜负、分数、其他手势族。
 
 工程：portrait-webgpu-base（Islash），设计空间 390×844，WebGPU，触点走 `clientToDesign`。
 

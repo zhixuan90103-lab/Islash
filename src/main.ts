@@ -15,6 +15,7 @@ import {
   type StageLayout,
 } from './adapt/design';
 import { VIEW, mountSlashWorld } from './game';
+import { createBackdropTexture } from './game/backdrop';
 import {
   mountDevicePreview,
   type DevicePreviewController,
@@ -45,7 +46,7 @@ async function boot(): Promise<void> {
 
   const renderer = await createRenderer({ container: stage });
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(VIEW.bg);
+  scene.background = createBackdropTexture();
 
   const camera = new THREE.PerspectiveCamera(
     VIEW.fov,
@@ -56,9 +57,11 @@ async function boot(): Promise<void> {
   camera.position.set(0, 0, VIEW.cameraZ);
   camera.lookAt(0, 0, 0);
 
-  scene.add(new THREE.HemisphereLight(0xdbeafe, 0x1e293b, 1.2));
-  const key = new THREE.DirectionalLight(0xffffff, 1.4);
-  key.position.set(3, 5, 2);
+  scene.add(
+    new THREE.HemisphereLight(VIEW.hemiSky, VIEW.hemiGround, VIEW.hemiIntensity),
+  );
+  const key = new THREE.DirectionalLight(VIEW.keyColor, VIEW.keyIntensity);
+  key.position.set(VIEW.keyPos[0], VIEW.keyPos[1], VIEW.keyPos[2]);
   scene.add(key);
 
   renderer.domElement.style.pointerEvents = 'none';

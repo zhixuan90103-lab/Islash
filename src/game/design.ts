@@ -10,7 +10,17 @@ export const WOOD_SHAPE = {
   width: 0.7,
   height: 2,
   depth: 0.15,
+  /**
+   * 正面倒角宽度（世界单位）。侧面竖直；只在朝相机一圈做约 45° 等宽倒角。
+   * 切的是 2D 轮廓，不是 3D。不要改成整板锥台。
+   */
+  frontInset: 0.028,
 };
+
+/** 倒角 XY 宽度；Z 向用同一值，斜角约 45°。 */
+export function bevelInset(_depth: number): number {
+  return WOOD_SHAPE.frontInset;
+}
 
 /** 长宽高乘数，默认 1 = 保持 WOOD_SHAPE。lift 为相对画面中心的 Y。 */
 export const WOOD = {
@@ -31,8 +41,18 @@ export function woodSize(): { width: number; height: number; depth: number } {
 export const VIEW = {
   fov: 45,
   cameraZ: 6.2,
-  bg: 0x0b1020,
-  woodColor: 0x7c3aed,
+  /** 参考作水色：中心亮青、四周偏蓝。 */
+  bg: 0x2eb5e0,
+  bgCenter: 0x6ad4f0,
+  bgEdge: 0x0d6e9c,
+  woodColor: 0xd4893a,
+  hemiSky: 0xfff6e8,
+  hemiGround: 0x1a6d8c,
+  hemiIntensity: 0.9,
+  keyColor: 0xfff4e6,
+  keyIntensity: 1.45,
+  /** 偏上、略靠镜头，倒角高光在上沿、暗边在左下。 */
+  keyPos: [1.6, 7.2, 5.4] as const,
 };
 
 /** 出刀：采样、出刃、何时落刀。 */

@@ -17,14 +17,14 @@ portrait-webgpu-base/
 ├── vite.config.ts          # base: './' · port 5190
 ├── capacitor.config.ts     # contentInset never · scrollEnabled false
 ├── src/
-│   ├── main.ts             # 壳启动 + 挂划切世界
+│   ├── main.ts             # 壳启动 + 背景/灯 + 挂划切世界
 │   ├── create-renderer.ts
 │   ├── style.css
 │   ├── adapt/
 │   │   ├── design.ts       # 390×844 · layout · clientToDesign
 │   │   ├── devicePreview.ts
 │   │   └── safeArea.ts
-│   ├── game/               # 划切玩法；参数 design.ts
+│   ├── game/               # 划切玩法；参数 design.ts；网格见 SLASH-DESIGN 几何
 │   └── utils/haptics.ts
 ├── plugins/native-haptics/ # Swift 真源
 └── scripts/bootstrap-ios.mjs

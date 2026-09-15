@@ -99,10 +99,10 @@ export async function createSlashPhysics(): Promise<SlashPhysics> {
   const bodies: PhysBody[] = [];
 
   const addMesh: SlashPhysics['addMesh'] = (mesh, kind) => {
-    centerOnVolumeCom(mesh);
+    const dynamic = kind === 'box' || kind === 'convex';
+    if (dynamic) centerOnVolumeCom(mesh);
     const t = mesh.position;
     const q = mesh.quaternion;
-    const dynamic = kind === 'box' || kind === 'convex';
     const desc = dynamic
       ? RAPIER.RigidBodyDesc.dynamic()
           .setCanSleep(true)
