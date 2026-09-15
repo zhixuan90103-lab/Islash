@@ -142,6 +142,41 @@ function clipLineToHull(
   };
 }
 
+export function rankedHullEdges(
+  p: DesignPoint,
+  hull: ProjPoly,
+): { edge: number; point: DesignPoint; dist: number }[] {
+  const rows: { edge: number; point: DesignPoint; dist: number }[] = [];
+  for (let i = 0; i < hull.length; i++) {
+    const a = hull[i];
+    const b = hull[(i + 1) % hull.length];
+    const abx = b.x - a.x;
+    const aby = b.y - a.y;
+    const len2 = abx * abx + aby * aby || 1;
+    let t = ((p.x - a.x) * abx + (p.y - a.y) * aby) / len2;
+    t = Math.max(0, Math.min(1, t));
+    const qx = a.x + abx * t;
+    const qy = a.y + aby * t;
+    const dx = p.x - qx;
+    const dy = p.y - qy;
+    rows.push({
+      edge: i,
+      point: { x: qx, y: qy },
+      dist: Math.hypot(dx, dy),
+    });
+  }
+  rows.sort((x, y) => x.dist - y.dist);
+  return rows;
+}
+
+export function nearestHullEdge(
+  p: DesignPoint,
+  hull: ProjPoly,
+): { edge: number; point: DesignPoint; dist: number } {
+  const rows = rankedHullEdges(p, hull);
+  return rows[0] ?? { edge: 0, point: p, dist: Infinity };
+}
+
 export function closestHullEdge(p: DesignPoint, hull: ProjPoly): number {
   let best = 0;
   let bestD = Infinity;

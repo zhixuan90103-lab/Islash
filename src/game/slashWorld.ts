@@ -109,6 +109,7 @@ export async function mountSlashWorld(
       stroke,
       seg,
       born,
+      dtSec,
     );
     if (!best) return false;
     camera.updateMatrixWorld(true);
@@ -203,7 +204,18 @@ export async function mountSlashWorld(
           );
           if (ang <= FLASH.aimAngle) aimStable += 1;
           else aimStable = 0;
-          const aimed = aimStable >= FLASH.aimSegs && speed >= FLASH.minSpeed;
+          const cyan = geom ?? locked;
+          const ax = cyan.c1.x - cyan.c0.x;
+          const ay = cyan.c1.y - cyan.c0.y;
+          const full = Math.hypot(ax, ay) || 1;
+          const traveled =
+            ((lastSeg[1].x - cyan.c0.x) * ax + (lastSeg[1].y - cyan.c0.y) * ay) /
+            full;
+          const nearExit = traveled / full >= FLASH.minTravelRatio;
+          const aimed =
+            aimStable >= FLASH.aimSegs &&
+            speed >= FLASH.minSpeed &&
+            nearExit;
           if (aimed) flashHot = true;
         } else {
           flashHot = false;

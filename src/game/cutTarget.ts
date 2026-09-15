@@ -1,14 +1,20 @@
 import type * as THREE from 'three';
+import { FLASH, START } from './design';
 import {
   chordLength,
   clipBackToEnter,
   clipChordToHull,
   clipInfiniteLineToHull,
   closestHullEdge,
+  rankedHullEdges,
   pointInConvexHull,
   projectMeshHull,
 } from './slashHit';
-import type { DesignPoint, SlashStroke } from './slashInput';
+import {
+  segmentSpeedPxPerSec,
+  type DesignPoint,
+  type SlashStroke,
+} from './slashInput';
 
 export type CutTarget = {
   mesh: THREE.Mesh;
@@ -51,6 +57,7 @@ export function resolveCutBySegment(
   stroke: SlashStroke,
   seg: [DesignPoint, DesignPoint],
   skipIds: Set<number>,
+  dtSec: number,
 ): CutTarget | null {
   const [a, b] = seg;
   if (chordLength(a, b) < 1e-4) return null;
@@ -85,7 +92,28 @@ export function resolveCutBySegment(
     }
     const nowInside = pointInConvexHull(b, proj.hull);
     st.inside = nowInside;
-    if (nowInside) return null;
+    if (nowInside) {
+      const speed = segmentSpeedPxPerSec(a, b, dtSec);
+      if (speed < START.fastSpeed) return null;
+      const line = clipInfiniteLineToHull(st.c0, b, proj.hull);
+      if (!line) return null;
+      const exit = line[1];
+      const exitEdge = closestHullEdge(exit, proj.hull);
+      if (!twoEdges(st.enterEdge, exitEdge, st.c0, exit, proj.hull)) return null;
+      const ax = exit.x - st.c0.x;
+      const ay = exit.y - st.c0.y;
+      const full = Math.hypot(ax, ay) || 1;
+      const traveled =
+        ((b.x - st.c0.x) * ax + (b.y - st.c0.y) * ay) / full;
+      if (traveled / full < FLASH.minTravelRatio) return null;
+      stroke.progress.delete(trackedId);
+      return {
+        mesh,
+        c0: st.c0,
+        c1: exit,
+        chord: Math.max(st.chord, full),
+      };
+    }
 
     const exitEdge = clipped
       ? clipped.exitEdge
@@ -103,7 +131,55 @@ export function resolveCutBySegment(
     const insideB = pointInConvexHull(b, proj.hull);
     const entered = !!clipped || insideB;
     if (!entered) continue;
-    if (!fromOutside) continue;
+
+    if (!fromOutside) {
+      const press = stroke.points[0] ?? a;
+      const ranked = rankedHullEdges(press, proj.hull);
+      const near = ranked[0];
+      const second = ranked[1];
+      if (!near) continue;
+      const speed = segmentSpeedPxPerSec(a, b, dtSec);
+      const fast = speed >= START.fastSpeed;
+      const maxDist = fast ? START.fastDist : START.slowDist;
+      if (near.dist > maxDist) continue;
+
+      const corner =
+        !!second &&
+        second.dist <= maxDist &&
+        second.dist - near.dist < START.slowClear;
+
+      let c0 = near.point;
+      let enterEdge = near.edge;
+
+      if (corner) {
+        if (chordLength(press, b) < START.cornerMove) continue;
+        const hit = clipBackToEnter(a, b, proj.hull);
+        if (!hit) continue;
+        const backEdge = closestHullEdge(hit.c0, proj.hull);
+        const row = ranked.find((r) => r.edge === backEdge);
+        if (!row || row.dist > maxDist) continue;
+        c0 = hit.c0;
+        enterEdge = backEdge;
+      } else if (fast) {
+        const hit = clipBackToEnter(a, b, proj.hull);
+        if (hit) {
+          const backEdge = closestHullEdge(hit.c0, proj.hull);
+          if (backEdge === near.edge) {
+            c0 = hit.c0;
+            enterEdge = backEdge;
+          }
+        }
+      }
+
+      stroke.progress.set(mesh.id, {
+        c0,
+        c1: b,
+        chord: chordLength(c0, b),
+        inside: true,
+        enterEdge,
+      });
+      return null;
+    }
 
     const inf = clipped
       ? null
