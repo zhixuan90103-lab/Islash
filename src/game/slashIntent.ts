@@ -67,7 +67,6 @@ export function headingAngleDeg(
 
 export function resetLock(stroke: SlashStroke): void {
   const early = stroke.intent.earlyFlashed;
-  const hold = stroke.intent.assistHold;
   const speeds = stroke.intent.speedSamples;
   stroke.intent.locked = false;
   stroke.intent.stable = 0;
@@ -76,7 +75,6 @@ export function resetLock(stroke: SlashStroke): void {
   stroke.intent.flashHot = false;
   stroke.intent.aimStable = 0;
   stroke.intent.earlyFlashed = early;
-  stroke.intent.assistHold = hold;
   stroke.intent.speedSamples = speeds;
 }
 
@@ -96,34 +94,6 @@ function tipInAnyHull(
   return false;
 }
 
-function minDistToHulls(
-  meshes: THREE.Mesh[],
-  camera: THREE.Camera,
-  tip: DesignPoint,
-): number {
-  let min = Infinity;
-  for (const mesh of meshes) {
-    const proj = projectMeshHull(mesh, camera);
-    if (!proj) continue;
-    if (pointInConvexHull(tip, proj.hull)) return 0;
-    const near = rankedHullEdges(tip, proj.hull)[0];
-    if (near && near.dist < min) min = near.dist;
-  }
-  return min;
-}
-
-function maybeClearAssistHold(
-  stroke: SlashStroke,
-  live: THREE.Mesh[],
-  camera: THREE.Camera,
-  tip: DesignPoint,
-): void {
-  if (!stroke.intent.assistHold) return;
-  if (tipInAnyHull(live, camera, tip)) return;
-  if (minDistToHulls(live, camera, tip) < START.assistLeave) return;
-  stroke.intent.assistHold = false;
-}
-
 export function twoEdges(
   enterEdge: number,
   exitEdge: number,
@@ -136,62 +106,61 @@ export function twoEdges(
   return e !== x;
 }
 
-function adjacentEdges(enter: number, exit: number, n: number): boolean {
-  if (n < 3 || enter < 0 || exit < 0) return false;
-  const d = Math.abs(enter - exit);
-  return d === 1 || d === n - 1;
-}
-
-function distToLine(
-  p: DesignPoint,
-  a: DesignPoint,
-  b: DesignPoint,
-): number {
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = hypot(dx, dy) || 1;
-  return Math.abs((p.x - a.x) * dy - (p.y - a.y) * dx) / len;
-}
-
-function sameTrend(
-  prev: { c0: DesignPoint; c1: DesignPoint },
-  next: { c0: DesignPoint; c1: DesignPoint },
-): boolean {
-  const ax = prev.c1.x - prev.c0.x;
-  const ay = prev.c1.y - prev.c0.y;
-  const bx = next.c1.x - next.c0.x;
-  const by = next.c1.y - next.c0.y;
-  const ang = headingAngleDeg(ax, ay, bx, by);
-  if (ang > START.trendAngle) return false;
-  const d = Math.min(
-    distToLine(next.c0, prev.c0, prev.c1),
-    distToLine(next.c1, prev.c0, prev.c1),
-  );
-  return d <= START.trendDist;
-}
-
-function takeCommit(
-  stroke: SlashStroke,
-  target: CutTarget,
-): CutTarget | null {
-  if (stroke.lastSlash && sameTrend(stroke.lastSlash, target)) return null;
-  return target;
-}
-
 function slashDeepEnough(
   c0: DesignPoint,
   c1: DesignPoint,
-  enterEdge: number,
-  exitEdge: number,
-  hull: DesignPoint[],
   box: ProjBox,
 ): boolean {
   const len = chordLength(c0, c1);
-  const base = Math.max(SLASH.minChord, throughThreshold(box));
-  const adj = adjacentEdges(enterEdge, exitEdge, hull.length);
-  const short = Math.min(box.maxX - box.minX, box.maxY - box.minY);
-  const need = adj ? Math.max(base, START.cornerMinChord * short) : base;
-  return len >= need;
+  return len >= Math.max(SLASH.minChord, throughThreshold(box));
+}
+
+function speedBlend(speed: number): number {
+  const cap = Math.max(1, START.fastSpeed);
+  return Math.max(0, Math.min(1, speed / cap));
+}
+
+function startRadius(speed: number): number {
+  const t = speedBlend(speed);
+  return START.slowDist + (START.fastDist - START.slowDist) * t;
+}
+
+function endTravelNeed(speed: number): number {
+  const t = speedBlend(speed);
+  return 1 - (1 - START.endTravelFast) * t;
+}
+
+function pickEnterByScore(
+  press: DesignPoint,
+  slash: DesignPoint,
+  hull: DesignPoint[],
+  radius: number,
+): { edge: number; point: DesignPoint } | null {
+  const ranked = rankedHullEdges(press, hull);
+  const sl = hypot(slash.x, slash.y) || 1;
+  const sdx = slash.x / sl;
+  const sdy = slash.y / sl;
+  let best: { edge: number; point: DesignPoint; score: number } | null = null;
+  const n = hull.length;
+  for (let i = 0; i < n; i++) {
+    const row = ranked.find((r) => r.edge === i);
+    if (!row || row.dist > radius) continue;
+    const prox = 1 - row.dist / radius;
+    const e0 = hull[i];
+    const e1 = hull[(i + 1) % n];
+    const ex = e1.x - e0.x;
+    const ey = e1.y - e0.y;
+    const el = hypot(ex, ey) || 1;
+    const nx = -ey / el;
+    const ny = ex / el;
+    const align = Math.max(0, nx * sdx + ny * sdy);
+    const score = 0.55 * prox + 0.45 * align;
+    if (!best || score > best.score) {
+      best = { edge: i, point: row.point, score };
+    }
+  }
+  if (!best || best.score < START.scoreMin) return null;
+  return { edge: best.edge, point: best.point };
 }
 
 function travelAlongCyan(
@@ -296,7 +265,6 @@ export function resolveCutBySegment(
   const live = meshes.filter(
     (m) => !stroke.slicedIds.has(m.id) && !skipIds.has(m.id),
   );
-  maybeClearAssistHold(stroke, live, camera, b);
 
   const trackedId = stroke.progress.size ? [...stroke.progress.keys()][0] : null;
 
@@ -320,14 +288,13 @@ export function resolveCutBySegment(
     const nowInside = pointInConvexHull(b, proj.hull);
     st.inside = nowInside;
     if (nowInside) {
-      if (stroke.intent.assistHold) return null;
       const speed = pushSpeed(stroke, segmentSpeedPxPerSec(a, b, dtSec));
-      if (speed < START.fastSpeed) return null;
+      const need = endTravelNeed(speed);
+      if (need >= 0.999) return null;
       const line = clipInfiniteLineToHull(st.c0, b, proj.hull);
       if (!line) return null;
       const exit = line[1];
       const full = chordLength(st.c0, exit);
-      if (full < START.assistMinChord) return null;
       const exitEdge = closestHullEdge(exit, proj.hull);
       if (!twoEdges(st.enterEdge, exitEdge, st.c0, exit, proj.hull)) return null;
       const ang = headingAngleDeg(
@@ -338,28 +305,15 @@ export function resolveCutBySegment(
       );
       if (ang > FLASH.aimAngle) return null;
       const ratio = travelAlongCyan(st.c0, exit, b);
-      if (ratio < FLASH.minTravelRatio) return null;
-      if (
-        !slashDeepEnough(
-          st.c0,
-          exit,
-          st.enterEdge,
-          exitEdge,
-          proj.hull,
-          proj.box,
-        )
-      ) {
-        return null;
-      }
-      const assisted = takeCommit(stroke, {
+      if (ratio < need) return null;
+      if (!slashDeepEnough(st.c0, exit, proj.box)) return null;
+      stroke.progress.delete(trackedId);
+      return {
         mesh,
         c0: st.c0,
         c1: exit,
         chord: Math.max(st.chord, full),
-      });
-      if (!assisted) return null;
-      stroke.progress.delete(trackedId);
-      return assisted;
+      };
     }
 
     const exitEdge = clipped
@@ -367,24 +321,8 @@ export function resolveCutBySegment(
       : closestHullEdge(st.c1, proj.hull);
     stroke.progress.delete(trackedId);
     if (!twoEdges(st.enterEdge, exitEdge, st.c0, st.c1, proj.hull)) return null;
-    if (
-      !slashDeepEnough(
-        st.c0,
-        st.c1,
-        st.enterEdge,
-        exitEdge,
-        proj.hull,
-        proj.box,
-      )
-    ) {
-      return null;
-    }
-    return takeCommit(stroke, {
-      mesh,
-      c0: st.c0,
-      c1: st.c1,
-      chord: st.chord,
-    });
+    if (!slashDeepEnough(st.c0, st.c1, proj.box)) return null;
+    return { mesh, c0: st.c0, c1: st.c1, chord: st.chord };
   }
 
   for (const mesh of live) {
@@ -398,49 +336,18 @@ export function resolveCutBySegment(
 
     if (!fromOutside) {
       const press = stroke.points[0] ?? a;
-      const ranked = rankedHullEdges(press, proj.hull);
-      const near = ranked[0];
-      const second = ranked[1];
-      if (!near) continue;
       const speed = segmentSpeedPxPerSec(a, b, dtSec);
-      const fast = speed >= START.fastSpeed;
-      const maxDist = fast ? START.fastDist : START.slowDist;
-      if (near.dist > maxDist) continue;
-
-      const corner =
-        !!second &&
-        second.dist <= maxDist &&
-        second.dist - near.dist < START.slowClear;
-
-      let c0 = near.point;
-      let enterEdge = near.edge;
-
-      if (corner) {
-        if (chordLength(press, b) < START.cornerMove) continue;
-        const hit = clipBackToEnter(a, b, proj.hull);
-        if (!hit) continue;
-        const backEdge = closestHullEdge(hit.c0, proj.hull);
-        const row = ranked.find((r) => r.edge === backEdge);
-        if (!row || row.dist > maxDist) continue;
-        c0 = hit.c0;
-        enterEdge = backEdge;
-      } else if (fast) {
-        const hit = clipBackToEnter(a, b, proj.hull);
-        if (hit) {
-          const backEdge = closestHullEdge(hit.c0, proj.hull);
-          if (backEdge === near.edge) {
-            c0 = hit.c0;
-            enterEdge = backEdge;
-          }
-        }
-      }
-
+      const radius = startRadius(speed);
+      const slash = { x: b.x - press.x, y: b.y - press.y };
+      if (hypot(slash.x, slash.y) < 6) continue;
+      const picked = pickEnterByScore(press, slash, proj.hull, radius);
+      if (!picked) continue;
       stroke.progress.set(mesh.id, {
-        c0,
+        c0: picked.point,
         c1: b,
-        chord: chordLength(c0, b),
+        chord: chordLength(picked.point, b),
         inside: true,
-        enterEdge,
+        enterEdge: picked.edge,
       });
       return null;
     }
@@ -461,10 +368,8 @@ export function resolveCutBySegment(
       !insideB &&
       twoEdges(enterEdge, exitEdge, c0, c1, proj.hull)
     ) {
-      if (
-        slashDeepEnough(c0, c1, enterEdge, exitEdge, proj.hull, proj.box)
-      ) {
-        return takeCommit(stroke, { mesh, c0, c1, chord });
+      if (slashDeepEnough(c0, c1, proj.box)) {
+        return { mesh, c0, c1, chord };
       }
       continue;
     }
