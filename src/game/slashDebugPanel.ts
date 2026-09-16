@@ -54,8 +54,8 @@ const INTENT_SLIDERS: SliderSpec[] = [
 ];
 
 const FLASH_SLIDERS: SliderSpec[] = [
-  { key: 'minSpeed', label: '刀光滑速', min: 40, max: 400, step: 10 },
-  { key: 'minSpeedOff', label: '刀光熄速', min: 20, max: 300, step: 10 },
+  { key: 'aimAngle', label: '对准角', min: 4, max: 30, step: 1 },
+  { key: 'aimSegs', label: '对准段数', min: 1, max: 12, step: 1 },
   { key: 'life', label: '刀光寿命', min: 0.06, max: 0.8, step: 0.02 },
   { key: 'coreW', label: '刀光芯宽', min: 0.5, max: 10, step: 0.1 },
   { key: 'glowW', label: '泛光半径', min: 4, max: 48, step: 1 },

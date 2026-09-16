@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { applyBladeImpulse, pieceVolume } from './bladeForce';
 import {
+  consumeCutLine,
   crackAlongStroke,
   resetSlashIntent,
   stepSlashIntent,
@@ -100,7 +101,6 @@ export async function mountSlashWorld(
     stroke.slicedIds.add(commit.mesh.id);
     stroke.progress.clear();
     resetSlashIntent(stroke);
-    stroke.awaitBlank = true;
     const speedPx = Math.max(
       segmentSpeedPxPerSec(seg[0], seg[1], dtSec),
       80,
@@ -114,7 +114,7 @@ export async function mountSlashWorld(
       speedPx,
     );
     lastCommit = { c0: commit.c0, c1: commit.c1 };
-    stroke.lastSlash = lastCommit;
+    consumeCutLine(stroke, commit.c0, commit.c1);
     const crack2 =
       crackAlongStroke(
         wood.cuttables,

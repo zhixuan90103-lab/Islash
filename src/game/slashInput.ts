@@ -40,17 +40,23 @@ export function emptyIntent(): SlashIntent {
   };
 }
 
+/** 本划已交刀的有向无限直线（网格切开成功后才写入）。 */
+export type ConsumedLine = {
+  ox: number;
+  oy: number;
+  dx: number;
+  dy: number;
+};
+
 export type SlashStroke = {
   pointerId: number;
   points: DesignPoint[];
   armed: boolean;
   slicedIds: Set<number>;
   progress: Map<number, MeshSlashProgress>;
-  /** 切完后必须先回到空白，再贯穿才算下一刀。 */
-  awaitBlank: boolean;
   intent: SlashIntent;
-  /** 本划上一刀的 A→B。同趋势贴缝不再切。 */
-  lastSlash: { c0: DesignPoint; c1: DesignPoint } | null;
+  /** 抬手前已消费的刀线。走廊内余势不再开新刀。 */
+  consumed: ConsumedLine[];
   startedAt: number;
   lastAt: number;
 };
@@ -153,8 +159,7 @@ export function createSlashInput(
       armed: false,
       slicedIds: new Set(),
       progress: new Map(),
-      awaitBlank: false,
-      lastSlash: null,
+      consumed: [],
       intent: emptyIntent(),
       startedAt: now,
       lastAt: now,

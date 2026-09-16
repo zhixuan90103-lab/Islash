@@ -15,6 +15,7 @@ import {
 import {
   emptyIntent,
   segmentSpeedPxPerSec,
+  type ConsumedLine,
   type DesignPoint,
   type SlashStroke,
 } from './slashInput';
@@ -32,7 +33,7 @@ export type IntentPhase =
   | 'miss'
   | 'track'
   | 'aimed'
-  | 'awaitBlank';
+  | 'hold';
 
 export type IntentFrame = {
   phase: IntentPhase;
@@ -82,18 +83,6 @@ export function resetSlashIntent(stroke: SlashStroke): void {
   stroke.intent = emptyIntent();
 }
 
-function tipInAnyHull(
-  meshes: THREE.Mesh[],
-  camera: THREE.Camera,
-  tip: DesignPoint,
-): boolean {
-  for (const mesh of meshes) {
-    const proj = projectMeshHull(mesh, camera);
-    if (proj && pointInConvexHull(tip, proj.hull)) return true;
-  }
-  return false;
-}
-
 export function twoEdges(
   enterEdge: number,
   exitEdge: number,
@@ -104,6 +93,69 @@ export function twoEdges(
   const e = enterEdge >= 0 ? enterEdge : closestHullEdge(c0, hull);
   const x = exitEdge >= 0 ? exitEdge : closestHullEdge(c1, hull);
   return e !== x;
+}
+
+function distToConsumed(p: DesignPoint, line: ConsumedLine): number {
+  return Math.abs((p.x - line.ox) * line.dy - (p.y - line.oy) * line.dx);
+}
+
+export function consumeCutLine(
+  stroke: SlashStroke,
+  c0: DesignPoint,
+  c1: DesignPoint,
+): void {
+  const dx = c1.x - c0.x;
+  const dy = c1.y - c0.y;
+  const len = hypot(dx, dy);
+  if (len < 1) return;
+  stroke.consumed.push({
+    ox: c0.x,
+    oy: c0.y,
+    dx: dx / len,
+    dy: dy / len,
+  });
+}
+
+function releaseConsumed(
+  stroke: SlashStroke,
+  a: DesignPoint,
+  b: DesignPoint,
+): void {
+  const vx = b.x - a.x;
+  const vy = b.y - a.y;
+  const vl = hypot(vx, vy);
+  if (vl < 1) return;
+  const ux = vx / vl;
+  const uy = vy / vl;
+  const w = START.corridor;
+  stroke.consumed = stroke.consumed.filter((line) => {
+    if (distToConsumed(b, line) > w) return true;
+    return ux * line.dx + uy * line.dy >= -0.15;
+  });
+}
+
+function occupying(stroke: SlashStroke, tip: DesignPoint): boolean {
+  const w = START.corridor;
+  return stroke.consumed.some((line) => distToConsumed(tip, line) <= w);
+}
+
+function edgeOnConsumed(
+  e0: DesignPoint,
+  e1: DesignPoint,
+  stroke: SlashStroke,
+): boolean {
+  const w = START.corridor;
+  return stroke.consumed.some(
+    (line) => distToConsumed(e0, line) <= w && distToConsumed(e1, line) <= w,
+  );
+}
+
+function chordOnConsumed(
+  c0: DesignPoint,
+  c1: DesignPoint,
+  stroke: SlashStroke,
+): boolean {
+  return edgeOnConsumed(c0, c1, stroke);
 }
 
 function slashDeepEnough(
@@ -125,7 +177,7 @@ function startRadius(speed: number): number {
   return START.slowDist + (START.fastDist - START.slowDist) * t;
 }
 
-function endTravelNeed(speed: number): number {
+export function endTravelNeed(speed: number): number {
   const t = speedBlend(speed);
   return 1 - (1 - START.endTravelFast) * t;
 }
@@ -135,6 +187,7 @@ function pickEnterByScore(
   slash: DesignPoint,
   hull: DesignPoint[],
   radius: number,
+  stroke: SlashStroke,
 ): { edge: number; point: DesignPoint } | null {
   const ranked = rankedHullEdges(press, hull);
   const sl = hypot(slash.x, slash.y) || 1;
@@ -145,9 +198,10 @@ function pickEnterByScore(
   for (let i = 0; i < n; i++) {
     const row = ranked.find((r) => r.edge === i);
     if (!row || row.dist > radius) continue;
-    const prox = 1 - row.dist / radius;
     const e0 = hull[i];
     const e1 = hull[(i + 1) % n];
+    if (edgeOnConsumed(e0, e1, stroke)) continue;
+    const prox = 1 - row.dist / radius;
     const ex = e1.x - e0.x;
     const ey = e1.y - e0.y;
     const el = hypot(ex, ey) || 1;
@@ -190,7 +244,7 @@ export function previewCutChord(
   stroke: SlashStroke,
   tip: DesignPoint,
 ): CutTarget | null {
-  if (stroke.awaitBlank) return null;
+  if (occupying(stroke, tip)) return null;
   const trackedId = stroke.progress.size ? [...stroke.progress.keys()][0] : null;
   if (trackedId == null) return null;
   const st = stroke.progress.get(trackedId);
@@ -233,6 +287,7 @@ export function crackAlongStroke(
   }
 
   if (stroke.slicedIds.size === 0) return null;
+  if (occupying(stroke, tip)) return null;
   const origin = from ?? tip;
   for (const mesh of meshes) {
     if (stroke.slicedIds.has(mesh.id)) continue;
@@ -257,10 +312,8 @@ export function resolveCutBySegment(
   const [a, b] = seg;
   if (chordLength(a, b) < 1e-4) return null;
 
-  if (stroke.awaitBlank) {
-    if (!tipInAnyHull(meshes, camera, b)) stroke.awaitBlank = false;
-    else return null;
-  }
+  releaseConsumed(stroke, a, b);
+  if (occupying(stroke, b)) return null;
 
   const live = meshes.filter(
     (m) => !stroke.slicedIds.has(m.id) && !skipIds.has(m.id),
@@ -307,6 +360,7 @@ export function resolveCutBySegment(
       const ratio = travelAlongCyan(st.c0, exit, b);
       if (ratio < need) return null;
       if (!slashDeepEnough(st.c0, exit, proj.box)) return null;
+      if (chordOnConsumed(st.c0, exit, stroke)) return null;
       stroke.progress.delete(trackedId);
       return {
         mesh,
@@ -319,10 +373,25 @@ export function resolveCutBySegment(
     const exitEdge = clipped
       ? clipped.exitEdge
       : closestHullEdge(st.c1, proj.hull);
+    if (!twoEdges(st.enterEdge, exitEdge, st.c0, st.c1, proj.hull)) {
+      stroke.progress.delete(trackedId);
+      return null;
+    }
+    if (!slashDeepEnough(st.c0, st.c1, proj.box)) {
+      stroke.progress.delete(trackedId);
+      return null;
+    }
+    if (chordOnConsumed(st.c0, st.c1, stroke)) {
+      stroke.progress.delete(trackedId);
+      return null;
+    }
     stroke.progress.delete(trackedId);
-    if (!twoEdges(st.enterEdge, exitEdge, st.c0, st.c1, proj.hull)) return null;
-    if (!slashDeepEnough(st.c0, st.c1, proj.box)) return null;
-    return { mesh, c0: st.c0, c1: st.c1, chord: st.chord };
+    return {
+      mesh,
+      c0: st.c0,
+      c1: st.c1,
+      chord: st.chord,
+    };
   }
 
   for (const mesh of live) {
@@ -336,11 +405,11 @@ export function resolveCutBySegment(
 
     if (!fromOutside) {
       const press = stroke.points[0] ?? a;
-      const speed = segmentSpeedPxPerSec(a, b, dtSec);
+      const speed = pushSpeed(stroke, segmentSpeedPxPerSec(a, b, dtSec));
       const radius = startRadius(speed);
       const slash = { x: b.x - press.x, y: b.y - press.y };
       if (hypot(slash.x, slash.y) < 6) continue;
-      const picked = pickEnterByScore(press, slash, proj.hull, radius);
+      const picked = pickEnterByScore(press, slash, proj.hull, radius, stroke);
       if (!picked) continue;
       stroke.progress.set(mesh.id, {
         c0: picked.point,
@@ -356,9 +425,16 @@ export function resolveCutBySegment(
     const c0 = clipped?.c0 ?? inf?.[0];
     if (!c0) continue;
     const c1 = clipped?.c1 ?? b;
+    const n = proj.hull.length;
     const enterEdge = clipped
       ? clipped.enterEdge
       : closestHullEdge(c0, proj.hull);
+    if (enterEdge >= 0) {
+      const e0 = proj.hull[enterEdge];
+      const e1 = proj.hull[(enterEdge + 1) % n];
+      if (edgeOnConsumed(e0, e1, stroke)) continue;
+    }
+    if (chordOnConsumed(c0, clipped?.c1 ?? b, stroke)) continue;
     const exitEdge = clipped ? clipped.exitEdge : -1;
     const chord = clipped ? chordLength(c0, c1) : 0;
 
@@ -453,9 +529,7 @@ export function stepSlashIntent(
   const speed = segmentSpeedPxPerSec(seg[0], tip, dtSec);
   const it = stroke.intent;
 
-  if (stroke.awaitBlank && !tipInAnyHull(meshes, camera, tip)) {
-    stroke.awaitBlank = false;
-  }
+  releaseConsumed(stroke, seg[0], tip);
 
   const crack = crackAlongStroke(meshes, camera, stroke, tip, seg[0]);
   const commit = resolveCutBySegment(
@@ -491,8 +565,7 @@ export function stepSlashIntent(
       else it.aimStable = 0;
       const aimed =
         it.aimStable >= FLASH.aimSegs &&
-        speed >= FLASH.minSpeed &&
-        travelRatio >= FLASH.minTravelRatio;
+        travelRatio >= endTravelNeed(pushSpeed(stroke, speed));
       if (aimed) it.flashHot = true;
     } else {
       it.flashHot = false;
@@ -510,7 +583,7 @@ export function stepSlashIntent(
   const st = trackedId != null ? stroke.progress.get(trackedId) : undefined;
 
   let phase: IntentPhase = 'idle';
-  if (stroke.awaitBlank) phase = 'awaitBlank';
+  if (occupying(stroke, tip)) phase = 'hold';
   else if (it.locked) phase = 'aimed';
   else if (trackedId != null) phase = 'track';
   else if (stroke.armed) phase = 'arming';
