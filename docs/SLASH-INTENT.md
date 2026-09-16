@@ -150,7 +150,7 @@
 
 ### `TRAIL`
 
-`show` 1、`maxLen` 200、`life` 0.4（收回）、`stopSpeed` 16、`minDist` 1.5、`smooth` 0.018、`subdiv` 6、`headW` 5、`tailW` 0、`tipLen` 10、`predictAlpha` 0。
+`show` 1、`maxLen` 180、`life` 0.3（收回）、`still` 0.03（停手后再等才收）、`stopSpeed` 24、`minDist` 1.5、`smooth` 0.02、`subdiv` 6、`headW` 6.5、`tailW` 0、`tipLen` 10、`predictAlpha` 0。
 
 ### `SLASH`（提交深度，真源在设计总则）
 

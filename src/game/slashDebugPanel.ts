@@ -40,6 +40,7 @@ const PHYS_SLIDERS: SliderSpec[] = [
 const TRAIL_SLIDERS: SliderSpec[] = [
   { key: 'maxLen', label: '拖尾最长', min: 24, max: 220, step: 2 },
   { key: 'life', label: '收回时长', min: 0.06, max: 0.6, step: 0.02 },
+  { key: 'still', label: '停手延迟', min: 0, max: 0.25, step: 0.01 },
   { key: 'stopSpeed', label: '停手速度', min: 4, max: 160, step: 2 },
   { key: 'minDist', label: '拖尾间距', min: 0.5, max: 16, step: 0.5 },
   { key: 'smooth', label: '低通秒', min: 0, max: 0.08, step: 0.002 },

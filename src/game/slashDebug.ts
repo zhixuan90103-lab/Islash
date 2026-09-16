@@ -179,6 +179,7 @@ export function createSlashOverlay(stage: HTMLElement): {
   let intentDebug: IntentDebug | null = null;
   let emitting = false;
   let shownLen = 0;
+  let retractFrom = 0;
   let lastPaint = 0;
   let lastHead: DesignPoint | null = null;
   let lastHeadT = 0;
@@ -204,17 +205,19 @@ export function createSlashOverlay(stage: HTMLElement): {
   const retractTrail = (now: number) => {
     const dt = lastPaint ? Math.min(0.05, (now - lastPaint) / 1000) : 0;
     lastPaint = now;
-    /** 慢划 pointer 间隔常 >32ms，过短会把还在动当成停下。 */
-    if (lastHeadT && now - lastHeadT > 120) tipSpeed = 0;
+    /** 无新点超过 still+80ms 才清速度，避免慢划事件稀被当成停下。 */
+    const idleMs = Math.max(80, TRAIL.still * 1000 + 40);
+    if (lastHeadT && now - lastHeadT > idleMs) tipSpeed = 0;
 
     const cap = Math.max(8, TRAIL.maxLen);
     if (emitting && tipSpeed > TRAIL.stopSpeed) stillSec = 0;
     else stillSec += dt;
-    const moving = emitting && stillSec < 0.1;
+    const moving = emitting && stillSec < TRAIL.still;
     const target = moving ? cap : 0;
     const rate = cap / Math.max(0.05, TRAIL.life);
     if (target >= shownLen) {
       shownLen = Math.min(cap, pathLen(pts));
+      retractFrom = shownLen;
     } else {
       shownLen = Math.max(0, shownLen - rate * dt);
     }
@@ -312,16 +315,18 @@ export function createSlashOverlay(stage: HTMLElement): {
         distFromHead[i] = distFromHead[i + 1] + dist(ribbon[i], ribbon[i + 1]);
       }
     }
+    const widthMul =
+      retractFrom > 1 ? Math.max(0, Math.min(1, shownLen / retractFrom)) : 1;
     const widthAt = (i: number) => {
       const span = Math.max(shownLen, 1);
       const k = Math.max(0, Math.min(1, 1 - distFromHead[i] / span));
-      return TRAIL.tailW + (TRAIL.headW - TRAIL.tailW) * k * k;
+      return (TRAIL.tailW + (TRAIL.headW - TRAIL.tailW) * k * k) * widthMul;
     };
 
     if (TRAIL.show && ribbon.length === 1 && emitting) {
       const head = ribbon[0];
       ctx.beginPath();
-      ctx.arc(head.x, head.y, TRAIL.headW * 0.4, 0, Math.PI * 2);
+      ctx.arc(head.x, head.y, TRAIL.headW * 0.4 * widthMul, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(255,255,255,0.9)';
       ctx.fill();
     } else if (TRAIL.show && ribbon.length >= 2) {
@@ -355,8 +360,8 @@ export function createSlashOverlay(stage: HTMLElement): {
       const tdy = ribbon[n].y - ribbon[n - 1].y;
       const tlen = Math.hypot(tdx, tdy) || 1;
       const tip = {
-        x: head.x + (tdx / tlen) * TRAIL.tipLen,
-        y: head.y + (tdy / tlen) * TRAIL.tipLen,
+        x: head.x + (tdx / tlen) * TRAIL.tipLen * widthMul,
+        y: head.y + (tdy / tlen) * TRAIL.tipLen * widthMul,
       };
 
       ctx.beginPath();
@@ -448,6 +453,7 @@ export function createSlashOverlay(stage: HTMLElement): {
     intentDebug = null;
     emitting = true;
     shownLen = 0;
+    retractFrom = 0;
     lastPaint = 0;
     lastHead = null;
     lastHeadT = 0;
@@ -534,6 +540,7 @@ export function createSlashOverlay(stage: HTMLElement): {
     intentDebug = null;
     emitting = false;
     shownLen = 0;
+    retractFrom = 0;
     lastPaint = 0;
     lastHead = null;
     tipSpeed = 0;

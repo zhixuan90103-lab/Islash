@@ -115,18 +115,20 @@ export const TRAIL = {
   /** 1 = 画手指划痕。0 = 先藏起来看刀光。 */
   show: 1,
   /** 沿路径最长（设计 px）。滑再快也不超过。 */
-  maxLen: 200,
-  /** 满长收到指尖的时间（秒）。 */
-  life: 0.4,
-  /** 低于此速度（px/s）视为停手，开始收回。过大会把慢划当成停下。 */
-  stopSpeed: 16,
+  maxLen: 180,
+  /** 满长收到指尖的时间（秒）。开始收回之后才算。 */
+  life: 0.3,
+  /** 低于此速度（px/s）视为停手。过大会把慢划当成停下。 */
+  stopSpeed: 24,
+  /** 判定停下后，再等这么久才开始收尾（秒）。手指微颤会刷新计时。 */
+  still: 0.03,
   /** 新点最小间距。略大于微抖，仍跟上弯道。 */
   minDist: 1.5,
   /** 刀尖低通时间常数（秒）。只滤小抖，过大跟手变肉、轨迹变直。 */
-  smooth: 0.018,
+  smooth: 0.02,
   /** 绘制时每段 Catmull-Rom 细分。1 = 折线。 */
   subdiv: 6,
-  headW: 5,
+  headW: 6.5,
   tailW: 0,
   /** 刀尖三角沿前进方向探出（设计 px）。 */
   tipLen: 10,
@@ -181,7 +183,7 @@ export const FLASH = {
  * 力度：Δv ≈ impulseBase * kickToSpeed * 滑速系数，J = mass * Δv。
  */
 export const PHYS = {
-  gravityY: -8.0,
+  gravityY: -10.6,
   density: 2.6,
   friction: 0.85,
   restitution: 0.04,
