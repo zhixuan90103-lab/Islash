@@ -4,21 +4,23 @@
 
 调研：[SLASH-RESEARCH.md](./SLASH-RESEARCH.md)（玩法参考）、[SLASH-TECH.md](./SLASH-TECH.md)（连续切输入）。  
 意图：[SLASH-INTENT.md](./SLASH-INTENT.md)（入点 / 补切 / 已消费直线 / 刀光 / 夹缝）。  
+打击感：[SLASH-FEEL.md](./SLASH-FEEL.md)（顿帧、震屏、碎屑、划痕）。  
 本文是**当前工程已落地的规则**。调研里的「Box 三角剖分 / 不做物理」已被覆盖。
 
 ## 一句话
 
-滑动 = 刀；板 = 木头。划穿后 1 变 2：大块留下静止，小块被踢飞。无地面、无关卡、无分数。
+滑动 = 刀；板 = 木头。划穿后 1 变 2：大块留下静止，小块被踢飞。较大块体积低于整板 `CUT.finishRemain`（默认 1/10）时为完成切割，两块都沿刀向飞出。无地面、无关卡、无分数。
 
 ## 规则
 
 1. **一刀成立**：进出落在**两条不同凸包边上**，且切缝够深（`minChord` / `hullChordRatio`）。同一条边蹭不算。终点帮助：对准青线且行程 ≥ T(速度) 时可补出点；最慢须 100% 真出边。
 2. **下一刀**：同一按住可以多刀，但一刀是一条 A→B，不是一次按下。网格切开成功后该有向直线被本划消费；走廊内沿该方向的续滑（含真出边、对留下块再锁 A）不再出刀。横走出走廊或沿该线折返后可再切。细则见意图文。
 3. **命中**：微段与轮廓求交；刀线用入点→出点。从板外进，或起点打分锁 A。板心按下再拖出不记刀。抬手停在板内不切。
-4. **反馈**：夹缝（入边→刀尖）在下，刀光在中，手指划痕在上。刀光不等于提交。细则见意图文。
-5. **切开**：用刀线切开 **2D 轮廓**（`userData.profile`），每块按同一配方重新挤出。删旧 mesh，加两块。面积×厚度大的留下（static），小的变 dynamic。
+4. **反馈**：夹缝（入边→刀尖）在下，刀光在中，手指划痕在上。刀光不等于提交。切开成功才顿帧/碎屑/踢屏，见 [SLASH-FEEL.md](./SLASH-FEEL.md)。
+5. **切开**：用刀线切开 **2D 轮廓**（`userData.profile`），每块按同一配方重新挤出。删旧 mesh，加两块。面积×厚度大的留下（static），小的变 dynamic。子块继承整板 `originVolume`。
 6. **刀向**：入点→出点（设计坐标投到板面 XY）。冲量用法线 `Cross(刀向, 相机朝向)`，退化时 `camera.up`。
-7. **只踢被砍下的块**。留下的块不位移、不给冲量、不做体积质心平移。
+7. **未完成时只踢被砍下的块**。留下的块不位移、不给冲量、不做体积质心平移。
+7b. **完成切割**：切开后较大块体积 `< originVolume * CUT.finishRemain`（默认 0.1）。该刀两块都变 dynamic，各自按刀向 + 相对法线踢飞，不再留下 static。
 8. **飞出块**绕体积质心。质量/惯量 = Rapier 密度 × 碰撞体。无地面。
 9. **不伪造**「重的一侧向下」的额外力矩。
 10. **触控**走 `clientToDesign`；letterbox 外忽略。调试面板 `stopPropagation`，不抢刀。
@@ -122,13 +124,13 @@ J = mass * targetSpeed
 之后 |v| ≤ maxSpeed，|ω| ≤ maxSpin
 ```
 
-`impulseBase` 是目标速度系数，不是直接塞给 Rapier 的牛顿秒。`Δv = impulse / mass`。
+`impulseBase` 是目标速度系数，不是直接塞给 Rapier 的牛顿秒。`Δv = impulse / mass`。解冻时再乘 `FX.burst`（见打击感文）。
 
 ## 参数表（`PHYS`）
 
 | 键 | 默认 | 作用 |
 |----|------|------|
-| gravityY | -8 | 世界重力 Y |
+| gravityY | -10.6 | 世界重力 Y |
 | density | 2.6 | 碰撞体密度 → 质量 |
 | friction / restitution | 0.85 / 0.04 | 摩擦 / 弹性 |
 | linearDamping / angularDamping | 0.7 / 0.55 | 线/角阻尼 |
@@ -144,9 +146,9 @@ J = mass * targetSpeed
 
 `SLASH`：`armDist` 8、`interpGap` 5、`minChord` 8、`hullChordRatio` 0.08。提交时弦长必须够深。
 
-入点 / 补切 / 已消费直线 / 刀光 / 夹缝 / 划痕参数见 [SLASH-INTENT.md](./SLASH-INTENT.md) 参数表（`START` `INTENT` `FLASH` `TRAIL`）。
+入点 / 补切 / 已消费直线 / 刀光 / 夹缝 / 划痕参数见 [SLASH-INTENT.md](./SLASH-INTENT.md)（`START` `INTENT` `FLASH` `TRAIL`）。
 
-震屏（`SHAKE`）+ 切开特效（`FX`）：切开后顿帧期间两块沿法线挤压、切缝喷木屑；重砍（hit≥`flashAt`）短白闪+色差。解冻后冲量 × `burst` 再飞、再踢屏。
+顿帧 / 震屏 / 碎屑 / 闪 / 解冻加踢见 [SLASH-FEEL.md](./SLASH-FEEL.md)（`SHAKE` `FX`）。要点：只冻**这一刀新块**；相机 rest 做玩法，仅渲染前偏移。
 
 ## 模块
 
@@ -163,9 +165,9 @@ J = mass * targetSpeed
 | `woodProfile.ts` | 2D 轮廓、切开、清理 |
 | `woodChamfer.ts` | 半平面内收计划 + 封闭挤出网格 |
 | `wood.ts` | 生成/重置、meshFromProfile |
-| `slashWorld.ts` | 会话编排 |
-| `screenShake.ts` | 切开震屏（trauma + kick） |
-| `slashDebug.ts` | 夹缝、刀光、划痕 overlay |
+| `slashWorld.ts` | 会话编排、每刀顿帧、解冻冲量 |
+| `screenShake.ts` | 切开震屏 |
+| `slashDebug.ts` | 夹缝、刀光、划痕、碎屑、闪 overlay |
 | `slashDebugPanel.ts` | `#ui-root` 调参 |
 | `index.ts` | `mountSlashWorld` |
 

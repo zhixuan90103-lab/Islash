@@ -11,4 +11,5 @@ export {
   START,
   SHAKE,
   FX,
+  CUT,
 } from './design';

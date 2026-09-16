@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { pieceVolume } from './bladeForce';
 import { VIEW, WOOD, bevelInset, woodSize } from './design';
 import { createWoodSolid } from './woodChamfer';
 import {
@@ -61,6 +62,7 @@ export function meshFromProfile(
   m.userData.cuttable = true;
   m.userData.profile = (geom.userData.profile as Poly2[] | undefined) ?? profile;
   m.userData.depth = depth;
+  m.userData.originVolume = source.userData.originVolume;
   return m;
 }
 
@@ -113,6 +115,7 @@ export function createWoodSet(
     mesh.position.set(0, WOOD.lift, 0);
     mesh.userData.profile = rectProfile(size.width, size.height);
     mesh.userData.depth = size.depth;
+    mesh.userData.originVolume = pieceVolume(mesh);
     scene.add(mesh);
     prepareCuttable(mesh);
     physics.addMesh(mesh, 'staticBox');

@@ -27,7 +27,7 @@
 | iOS 注入 | `scripts/bootstrap-ios.mjs` |
 | 音效方案（未实现） | `docs/AUDIO.md` |
 | 划切规范 | `docs/SLASH-DESIGN.md`（参数 `src/game/design.ts`） |
-| 切开震屏 | `src/game/screenShake.ts`（参数 `SHAKE`） |
+| 打击感 | `docs/SLASH-FEEL.md`（`SHAKE` `FX` `TRAIL`；`screenShake.ts`） |
 | 意图识别 | `docs/SLASH-INTENT.md`（状态机 `src/game/slashIntent.ts`） |
 | 水色背景 | `src/game/backdrop.ts` |
 | 划切调研 | `docs/SLASH-RESEARCH.md` |
@@ -52,7 +52,7 @@
 6. **Pad 只改外层视口**，不改 `DESIGN_*`  
 7. **改 Swift 改 `plugins/native-haptics/`** 再 `ios:bootstrap`；震动接线见 `docs/HAPTICS.md`。Capacitor 8 的 `SceneDelegate` 必须 `rootViewController = BridgeViewController()`（默认 `CAPBridgeViewController` 不会注册插件）。不要用 JS `prepare()` 判断是否接上；真机 HUD 看 `plugin: true` + 点「点我震动」。  
 8. **无 WebGPU 则明确失败**，不静默 WebGL  
-9. **玩法参数只改 `src/game/design.ts`**（或调试面板）。砍飞必须质量归一（`J = mass * Δv`），禁止固定冲量打所有块。  
+9. **玩法参数只改 `src/game/design.ts`**（或调试面板）。砍飞必须质量归一（`J = mass * Δv`），禁止固定冲量打所有块。顿帧只冻**本刀新块**；震屏只渲染前偏相机。  
 10. **切开只切 2D 轮廓再竖直挤出 + 半平面内收倒角**（`userData.profile`）。块要封口。禁止锥台、禁止 3D CSG、禁止整块缩小 inset。细则：[docs/SLASH-DESIGN.md](docs/SLASH-DESIGN.md)「几何」。  
 11. **iOS**：`appId` = `com.wangzhixuan.islash.cut`，显示名 Islash Cut；真机不要 Simulator。  
 
@@ -72,7 +72,7 @@ npm run ios           # build + sync + 开 Xcode
 
 ## 业务怎么加
 
-- 玩法：`src/game/`；规则：[docs/SLASH-DESIGN.md](docs/SLASH-DESIGN.md)；意图：[docs/SLASH-INTENT.md](docs/SLASH-INTENT.md)（帮助只管 A 与青线终点；切开成功才消费该有向直线，走廊内余势不再出刀）  
+- 玩法：`src/game/`；规则：[docs/SLASH-DESIGN.md](docs/SLASH-DESIGN.md)；意图：[docs/SLASH-INTENT.md](docs/SLASH-INTENT.md)；打击感：[docs/SLASH-FEEL.md](docs/SLASH-FEEL.md)（帮助只管 A 与青线终点；切开成功才消费该有向直线，走廊内余势不再出刀）  
 - 保留：adapt / create-renderer / haptics / plugins / `base`  
 - 触控：`clientToDesign` + 忽略 letterbox 外  
 - UI：只挂 `#ui-root`（调试面板已在此）  

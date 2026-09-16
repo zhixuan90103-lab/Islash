@@ -1,6 +1,6 @@
 # 常规刀痕拖尾怎么做
 
-调研结论。本仓现状：沿路径最长 `TRAIL.maxLen`（默认 200px）；停手/抬手从尾收到指尖。刀尖宽、尾细。
+调研结论。本仓现状：沿路径最长 `TRAIL.maxLen`（默认 **180px**）；停手后再等 `still`（0.03s）从尾收到指尖，宽度一并收窄。刀尖宽、尾细、三角尖。真实触点 + 向心 Catmull-Rom。参数真源 `design.ts`，打击感总则 [SLASH-FEEL.md](./SLASH-FEEL.md)。
 
 拖尾是**表现**，和「一刀贯穿」判定无关。
 
@@ -74,7 +74,7 @@ https://www.flutterclutter.dev/flutter/tutorials/flutter-game-tutorial-fruit-nin
 | 几何 | canvas 填左右轮廓 | 同款丝带，或 GPU Trail |
 | 贴图 | 纯白填充 | 常用 head-body-tail 条带图 |
 
-宽度按「距刀尖的路径长度」采样。收回速度：满长 / `life`。
+宽度按「距刀尖的路径长度」采样。收回：满长 / `life`，同时 `width × shownLen/retractFrom`。
 
 ## 5. 来源
 

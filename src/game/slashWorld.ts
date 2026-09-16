@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { applyBladeImpulse, pieceVolume } from './bladeForce';
-import { FX, SHAKE } from './design';
+import { CUT, FX, SHAKE } from './design';
 import { createScreenShake, cutHit } from './screenShake';
 import type { PhysBody } from './slashPhysics';
 import {
@@ -46,24 +46,35 @@ export async function mountSlashWorld(
   const wood = createWoodSet(scene, physics);
   wood.spawn();
   let lastCommit: { c0: DesignPoint; c1: DesignPoint } | null = null;
-  let freezeLeft = 0;
-  const pendingKick: { hit: number; dir: THREE.Vector3 }[] = [];
   const pendingFly: {
     rec: PhysBody;
+    recKeep?: PhysBody;
     keep: THREE.Mesh;
     drop: THREE.Mesh;
     bladeDir: THREE.Vector3;
     hitPoint: THREE.Vector3;
     speedPx: number;
     squeeze: THREE.Vector3;
+    keepRest: THREE.Vector3;
+    dropRest: THREE.Vector3;
+    freezeLeft: number;
+    hit: number;
+    dir: THREE.Vector3;
   }[] = [];
   const _squeezeN = new THREE.Vector3();
+  const _zero = { x: 0, y: 0, z: 0 };
 
   const replaceCut = (
     old: THREE.Mesh,
     a: THREE.Mesh,
     b: THREE.Mesh,
-  ): { keep: THREE.Mesh; drop: THREE.Mesh; rec: PhysBody } => {
+    finish: boolean,
+  ): {
+    keep: THREE.Mesh;
+    drop: THREE.Mesh;
+    rec: PhysBody;
+    recKeep?: PhysBody;
+  } => {
     physics.removeMesh(old);
     scene.remove(old);
     old.geometry.dispose();
@@ -74,36 +85,68 @@ export async function mountSlashWorld(
 
     scene.add(keep);
     prepareCuttable(keep);
-    physics.addMesh(keep, 'staticConvex');
-    wood.cuttables.push(keep);
-    wood.track(keep);
+    let recKeep: PhysBody | undefined;
+    if (finish) {
+      recKeep = physics.addMesh(keep, 'convex');
+      wood.track(keep);
+    } else {
+      physics.addMesh(keep, 'staticConvex');
+      wood.cuttables.push(keep);
+      wood.track(keep);
+    }
 
     scene.add(drop);
     prepareCuttable(drop);
     const rec = physics.addMesh(drop, 'convex');
     wood.track(drop);
 
-    return { keep, drop, rec };
+    return { keep, drop, rec, recKeep };
   };
 
-  const flushImpact = () => {
-    for (const p of pendingFly) {
-      p.keep.position.addScaledVector(p.squeeze, -1);
-      p.drop.position.addScaledVector(p.squeeze, 1);
+  const pinBody = (
+    rec: PhysBody,
+    rest: THREE.Vector3,
+  ) => {
+    const b = rec.body;
+    b.setGravityScale(0, true);
+    b.setLinvel(_zero, true);
+    b.setAngvel(_zero, true);
+    b.setTranslation(rest, true);
+  };
+
+  const pinDrop = (p: (typeof pendingFly)[number]) => {
+    pinBody(p.rec, p.dropRest);
+    if (p.recKeep) pinBody(p.recKeep, p.keepRest);
+  };
+
+  const releaseCut = (p: (typeof pendingFly)[number]) => {
+    p.rec.body.setGravityScale(1, true);
+    p.keep.position.copy(p.keepRest);
+    p.drop.position.copy(p.dropRest);
+    applyBladeImpulse(
+      p.rec.body,
+      camera,
+      p.keep,
+      p.drop,
+      p.bladeDir,
+      p.hitPoint,
+      p.speedPx,
+      FX.burst,
+    );
+    if (p.recKeep) {
+      p.recKeep.body.setGravityScale(1, true);
       applyBladeImpulse(
-        p.rec.body,
+        p.recKeep.body,
         camera,
-        p.keep,
         p.drop,
+        p.keep,
         p.bladeDir,
         p.hitPoint,
         p.speedPx,
         FX.burst,
       );
     }
-    pendingFly.length = 0;
-    for (const k of pendingKick) shake.hit(k.hit, k.dir);
-    pendingKick.length = 0;
+    shake.hit(p.hit, p.dir);
   };
 
   const applyCommit = (
@@ -135,39 +178,47 @@ export async function mountSlashWorld(
     const volB = pieceVolume(result.b);
     const dropVol = Math.min(volA, volB);
     const keepVol = Math.max(volA, volB);
-    const pieces = replaceCut(commit.mesh, result.a, result.b);
+    const originVol =
+      Number(commit.mesh.userData.originVolume) || volA + volB;
+    const finish = keepVol < originVol * CUT.finishRemain;
+    const pieces = replaceCut(commit.mesh, result.a, result.b, finish);
     const hit = cutHit(speedPx, dropVol, keepVol);
     const freeze =
       SHAKE.freezeMin + hit * (SHAKE.freezeMax - SHAKE.freezeMin);
-    freezeLeft = Math.min(
-      SHAKE.freezeMax * 1.25,
-      freezeLeft + Math.max(0, freeze),
-    );
-    pendingKick.push({ hit, dir: result.bladeDir.clone() });
     _squeezeN.subVectors(pieces.drop.position, pieces.keep.position);
     if (_squeezeN.lengthSq() < 1e-10) _squeezeN.copy(result.normal);
     _squeezeN.normalize();
     const sq = new THREE.Vector3();
-    if (freezeLeft > 1e-4) {
+    const keepRest = pieces.keep.position.clone();
+    const dropRest = pieces.drop.position.clone();
+    if (freeze > 1e-4) {
       sq.copy(_squeezeN).multiplyScalar(FX.squeeze * (0.45 + 0.55 * hit));
       pieces.keep.position.add(sq);
       pieces.drop.position.addScaledVector(sq, -1);
     }
-    pendingFly.push({
+    const pending = {
       rec: pieces.rec,
+      recKeep: pieces.recKeep,
       keep: pieces.keep,
       drop: pieces.drop,
       bladeDir: result.bladeDir.clone(),
       hitPoint: result.hitPoint.clone(),
       speedPx,
       squeeze: sq,
-    });
+      keepRest,
+      dropRest,
+      freezeLeft: freeze,
+      hit,
+      dir: result.bladeDir.clone(),
+    };
+    if (freeze <= 1e-4) {
+      releaseCut(pending);
+    } else {
+      pinDrop(pending);
+      pendingFly.push(pending);
+    }
     overlay.burstChips(commit.c0, commit.c1, hit);
     overlay.impactFlash(hit);
-    if (freezeLeft <= 1e-4) {
-      freezeLeft = 0;
-      flushImpact();
-    }
     lastCommit = { c0: commit.c0, c1: commit.c1 };
     consumeCutLine(stroke, commit.c0, commit.c1);
     const crack2 =
@@ -182,7 +233,7 @@ export async function mountSlashWorld(
     else overlay.setCrack(null);
     overlay.freezeFlash();
     if (commitFlash) overlay.flash(commit.c0, commit.c1, false);
-    report('已切开');
+    report(finish ? '完成切割' : '已切开');
     return true;
   };
 
@@ -254,13 +305,20 @@ export async function mountSlashWorld(
   return {
     step: (dt) => {
       overlay.step();
-      if (freezeLeft > 0) {
-        freezeLeft -= dt;
-        if (freezeLeft > 0) return;
-        freezeLeft = 0;
-        flushImpact();
+      for (let i = pendingFly.length - 1; i >= 0; i--) {
+        const p = pendingFly[i];
+        p.freezeLeft -= dt;
+        if (p.freezeLeft > 0) pinDrop(p);
+        else {
+          pendingFly.splice(i, 1);
+          releaseCut(p);
+        }
       }
       physics.step(dt);
+      for (const p of pendingFly) {
+        p.keep.position.copy(p.keepRest).add(p.squeeze);
+        p.drop.position.copy(p.dropRest).addScaledVector(p.squeeze, -1);
+      }
       shake.step(dt);
     },
     applyView: () => shake.applyView(),

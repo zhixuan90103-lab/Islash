@@ -18,7 +18,7 @@ function bboxWorldCenter(mesh: THREE.Mesh, out: THREE.Vector3): void {
   mesh.localToWorld(out);
 }
 
-/** 只踢被砍下的块：刀向为主，切开法线/朝相机/上挑为辅。 */
+/** 踢一块：刀向为主，切开法线（self 相对 other）/朝相机/上挑为辅。完成切割时对两块各调一次。 */
 export function applyBladeImpulse(
   body: RAPIER.RigidBody,
   camera: THREE.Camera,

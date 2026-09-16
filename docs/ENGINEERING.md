@@ -24,7 +24,7 @@ portrait-webgpu-base/
 │   │   ├── design.ts       # 390×844 · layout · clientToDesign
 │   │   ├── devicePreview.ts
 │   │   └── safeArea.ts
-│   ├── game/               # 划切玩法；参数 design.ts；网格见 SLASH-DESIGN 几何
+│   ├── game/               # 划切；参数 design.ts；几何 SLASH-DESIGN；打击感 SLASH-FEEL
 │   └── utils/haptics.ts
 ├── plugins/native-haptics/ # Swift 真源
 └── scripts/bootstrap-ios.mjs

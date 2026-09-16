@@ -2,7 +2,7 @@
  * 划切玩法设计数据。改这里即改规则，不要在各模块里再写魔法数。
  *
  * 滑动 = 刀；盒子 = 木头。
- * 刀向 A→B 决定砍飞方向；滑速决定力度。只踢被砍下的块。
+ * 刀向 A→B 决定砍飞方向；滑速决定力度。未完成前只踢被砍下的块。
  */
 
 /** 木头设计形体（世界单位）。参数为 1 时按此尺寸建几何，不是正方体。 */
@@ -37,6 +37,15 @@ export function woodSize(): { width: number; height: number; depth: number } {
     depth: WOOD_SHAPE.depth * WOOD.depth,
   };
 }
+
+/**
+ * 砍击上限：相对整板体积。切开后较大块低于此 = 完成切割，两块都飞。
+ */
+export const CUT = {
+  finishRemain: 0.1,
+};
+
+export const CUT_DEFAULT = { ...CUT };
 
 export const VIEW = {
   fov: 45,
@@ -220,7 +229,7 @@ export const SHAKE = {
   amp: 0.003,
   freq: 6,
   /** 踢的峰值位移（世界单位，再乘 hit）。 */
-  kick: 0.02,
+  kick: 0.01,
   /** 冲到峰值的时间（秒）。短=硬砍。 */
   attack: 0.01,
   /** 从峰值收回的时间（秒）。长=衰减柔和。 */
