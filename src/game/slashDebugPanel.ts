@@ -1,6 +1,10 @@
 import {
   FLASH,
   FLASH_DEFAULT,
+  FX,
+  FX_DEFAULT,
+  SHAKE,
+  SHAKE_DEFAULT,
   INTENT,
   INTENT_DEFAULT,
   PHYS,
@@ -59,6 +63,31 @@ const INTENT_SLIDERS: SliderSpec[] = [
   { key: 'debug', label: '对缝调试', min: 0, max: 1, step: 1 },
 ];
 
+const FX_SLIDERS: SliderSpec[] = [
+  { key: 'chipCount', label: '碎屑数量', min: 0, max: 40, step: 1 },
+  { key: 'chipLife', label: '碎屑寿命', min: 0.12, max: 1.6, step: 0.02 },
+  { key: 'chipSpeed', label: '碎屑速度', min: 40, max: 480, step: 10 },
+  { key: 'squeeze', label: '接触挤压', min: 0, max: 0.12, step: 0.005 },
+  { key: 'flashAt', label: '闪阈值', min: 0, max: 1, step: 0.02 },
+  { key: 'flashLife', label: '闪时长', min: 0.02, max: 0.16, step: 0.005 },
+  { key: 'burst', label: '解冻加踢', min: 1, max: 2, step: 0.02 },
+];
+
+const SHAKE_SLIDERS: SliderSpec[] = [
+  { key: 'trauma', label: '每刀创伤', min: 0.05, max: 1, step: 0.05 },
+  { key: 'decay', label: '创伤衰减', min: 1, max: 16, step: 0.5 },
+  { key: 'amp', label: '噪声振幅', min: 0, max: 0.16, step: 0.005 },
+  { key: 'kick', label: '踢出振幅', min: 0, max: 0.2, step: 0.005 },
+  { key: 'attack', label: '出击时长', min: 0.004, max: 0.12, step: 0.002 },
+  { key: 'settle', label: '收回时长', min: 0.06, max: 0.5, step: 0.01 },
+  { key: 'freezeMin', label: '顿帧最短', min: 0, max: 0.12, step: 0.004 },
+  { key: 'freezeMax', label: '顿帧最长', min: 0.02, max: 0.2, step: 0.004 },
+  { key: 'freq', label: '噪声频率', min: 1, max: 12, step: 0.5 },
+  { key: 'roll', label: '滚转', min: 0, max: 0.12, step: 0.005 },
+  { key: 'floor', label: '力度保底', min: 0, max: 0.4, step: 0.01 },
+  { key: 'show', label: '震屏开', min: 0, max: 1, step: 1 },
+];
+
 const FLASH_SLIDERS: SliderSpec[] = [
   { key: 'aimAngle', label: '对准角', min: 4, max: 30, step: 1 },
   { key: 'aimSegs', label: '对准段数', min: 1, max: 12, step: 1 },
@@ -105,6 +134,10 @@ export function mountSlashDebugPanel(
       <div class="debug-trail"></div>
       <p class="debug-sec">意图</p>
       <div class="debug-intent"></div>
+      <p class="debug-sec">切开特效</p>
+      <div class="debug-fx"></div>
+      <p class="debug-sec">震屏</p>
+      <div class="debug-shake"></div>
       <p class="debug-sec">刀光</p>
       <div class="debug-flash"></div>
       <div class="debug-actions">
@@ -112,6 +145,8 @@ export function mountSlashDebugPanel(
         <button type="button" data-act="phys">重置物理</button>
         <button type="button" data-act="trail">重置拖尾</button>
         <button type="button" data-act="intent">重置意图</button>
+        <button type="button" data-act="fx">重置特效</button>
+        <button type="button" data-act="shake">重置震屏</button>
         <button type="button" data-act="flash">重置刀光</button>
       </div>
     </div>
@@ -124,6 +159,8 @@ export function mountSlashDebugPanel(
   const list = wrap.querySelector('.debug-sliders') as HTMLElement;
   const trailList = wrap.querySelector('.debug-trail') as HTMLElement;
   const intentList = wrap.querySelector('.debug-intent') as HTMLElement;
+  const fxList = wrap.querySelector('.debug-fx') as HTMLElement;
+  const shakeList = wrap.querySelector('.debug-shake') as HTMLElement;
   const flashList = wrap.querySelector('.debug-flash') as HTMLElement;
   const toggle = wrap.querySelector('.debug-toggle') as HTMLButtonElement;
 
@@ -234,6 +271,48 @@ export function mountSlashDebugPanel(
     intentInputs.push({ spec, input, val });
   }
 
+  const fxInputs: { spec: SliderSpec; input: HTMLInputElement; val: HTMLSpanElement }[] =
+    [];
+
+  for (const spec of FX_SLIDERS) {
+    const row = document.createElement('label');
+    row.className = 'debug-row';
+    const cur = FX[spec.key as keyof typeof FX];
+    row.innerHTML = `<span>${spec.label}</span><input type="range" min="${spec.min}" max="${spec.max}" step="${spec.step}" /><span class="debug-val"></span>`;
+    const input = row.querySelector('input')!;
+    const val = row.querySelector('.debug-val') as HTMLSpanElement;
+    input.value = String(cur);
+    val.textContent = Number(cur).toFixed(spec.step < 1 ? 2 : 0);
+    input.addEventListener('input', () => {
+      const n = Number(input.value);
+      (FX as Record<string, number>)[spec.key] = n;
+      val.textContent = n.toFixed(spec.step < 1 ? 2 : 0);
+    });
+    fxList.appendChild(row);
+    fxInputs.push({ spec, input, val });
+  }
+
+  const shakeInputs: { spec: SliderSpec; input: HTMLInputElement; val: HTMLSpanElement }[] =
+    [];
+
+  for (const spec of SHAKE_SLIDERS) {
+    const row = document.createElement('label');
+    row.className = 'debug-row';
+    const cur = SHAKE[spec.key as keyof typeof SHAKE];
+    row.innerHTML = `<span>${spec.label}</span><input type="range" min="${spec.min}" max="${spec.max}" step="${spec.step}" /><span class="debug-val"></span>`;
+    const input = row.querySelector('input')!;
+    const val = row.querySelector('.debug-val') as HTMLSpanElement;
+    input.value = String(cur);
+    val.textContent = Number(cur).toFixed(spec.step < 1 ? 2 : 0);
+    input.addEventListener('input', () => {
+      const n = Number(input.value);
+      (SHAKE as Record<string, number>)[spec.key] = n;
+      val.textContent = n.toFixed(spec.step < 1 ? 2 : 0);
+    });
+    shakeList.appendChild(row);
+    shakeInputs.push({ spec, input, val });
+  }
+
   const flashInputs: { spec: SliderSpec; input: HTMLInputElement; val: HTMLSpanElement }[] =
     [];
 
@@ -275,6 +354,16 @@ export function mountSlashDebugPanel(
       input.value = String(n);
       val.textContent = n.toFixed(spec.step < 1 ? 2 : 0);
     }
+    for (const { spec, input, val } of fxInputs) {
+      const n = FX[spec.key as keyof typeof FX];
+      input.value = String(n);
+      val.textContent = n.toFixed(spec.step < 1 ? 2 : 0);
+    }
+    for (const { spec, input, val } of shakeInputs) {
+      const n = SHAKE[spec.key as keyof typeof SHAKE];
+      input.value = String(n);
+      val.textContent = n.toFixed(spec.step < 1 ? 2 : 0);
+    }
     for (const { spec, input, val } of flashInputs) {
       const n = FLASH[spec.key as keyof typeof FLASH];
       input.value = String(n);
@@ -302,6 +391,16 @@ export function mountSlashDebugPanel(
   wrap.querySelector('[data-act="intent"]')!.addEventListener('click', (e) => {
     e.stopPropagation();
     Object.assign(INTENT, INTENT_DEFAULT);
+    sync();
+  });
+  wrap.querySelector('[data-act="fx"]')!.addEventListener('click', (e) => {
+    e.stopPropagation();
+    Object.assign(FX, FX_DEFAULT);
+    sync();
+  });
+  wrap.querySelector('[data-act="shake"]')!.addEventListener('click', (e) => {
+    e.stopPropagation();
+    Object.assign(SHAKE, SHAKE_DEFAULT);
     sync();
   });
   wrap.querySelector('[data-act="flash"]')!.addEventListener('click', (e) => {

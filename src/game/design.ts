@@ -205,10 +205,51 @@ export const PHYS = {
   maxSpin: 6,
 };
 
+/**
+ * 切开震屏。只在网格切开成功时加；玩法相机仍用 rest，渲染前再叠偏移。
+ * hit = clamp(speedK * sizeK, floor, 1)；trauma 累加封顶 1，振幅 trauma²。
+ */
+export const SHAKE = {
+  /** 1 = 开。 */
+  show: 1,
+  /** 每刀创伤增量（乘 hit）。碎振用，不要当主位移。 */
+  trauma: 0.22,
+  /** trauma / 秒。 */
+  decay: 8,
+  /** 噪声最大平移。出击阶段不加，收回才叠一点。 */
+  amp: 0.003,
+  freq: 6,
+  /** 踢的峰值位移（世界单位，再乘 hit）。 */
+  kick: 0.02,
+  /** 冲到峰值的时间（秒）。短=硬砍。 */
+  attack: 0.01,
+  /** 从峰值收回的时间（秒）。长=衰减柔和。 */
+  settle: 0.22,
+  roll: 0.02,
+  floor: 0.08,
+  /** 顿帧最短/最长（秒）。按 hit 插值；只冻物理，刀光/输入不停。 */
+  freezeMin: 0.032,
+  freezeMax: 0.1,
+};
+
+/** 切开接触：碎屑、挤压、重砍闪、解冻加踢。 */
+export const FX = {
+  chips: 1,
+  chipCount: 16,
+  chipLife: 0.78,
+  chipSpeed: 220,
+  squeeze: 0.035,
+  flashAt: 0.42,
+  flashLife: 0.05,
+  burst: 1.28,
+};
+
 export const WOOD_DEFAULT = { ...WOOD };
 export const PHYS_DEFAULT = { ...PHYS };
 export const TRAIL_DEFAULT = { ...TRAIL };
 export const FLASH_DEFAULT = { ...FLASH };
+export const SHAKE_DEFAULT = { ...SHAKE };
+export const FX_DEFAULT = { ...FX };
 
 export function bladeSpeedScale(speedPxPerSec: number): number {
   const v = Math.max(PHYS.minSliceSpeed, speedPxPerSec);

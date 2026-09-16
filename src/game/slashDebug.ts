@@ -1,5 +1,5 @@
 import { DESIGN_HEIGHT, DESIGN_WIDTH } from '../adapt/design';
-import { FLASH, INTENT, TRAIL } from './design';
+import { FLASH, FX, INTENT, TRAIL } from './design';
 import type { DesignPoint } from './slashInput';
 
 export type IntentDebug = {
@@ -11,6 +11,18 @@ export type IntentDebug = {
 };
 
 type TrailPt = DesignPoint;
+
+type Chip = {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  max: number;
+  r: number;
+  rot: number;
+  vr: number;
+};
 
 function dist(a: DesignPoint, b: DesignPoint): number {
   return Math.hypot(b.x - a.x, b.y - a.y);
@@ -163,6 +175,8 @@ export function createSlashOverlay(stage: HTMLElement): {
   setIntentDebug: (info: IntentDebug | null) => void;
   flash: (c0: DesignPoint, c1: DesignPoint, follow?: boolean) => void;
   freezeFlash: () => void;
+  burstChips: (c0: DesignPoint, c1: DesignPoint, hit: number) => void;
+  impactFlash: (hit: number) => void;
   end: () => void;
   step: (now?: number) => void;
   clear: () => void;
@@ -186,6 +200,9 @@ export function createSlashOverlay(stage: HTMLElement): {
   let tipSpeed = 0;
   let stillSec = 0;
   let filt: DesignPoint | null = null;
+  const chips: Chip[] = [];
+  let flashLeft = 0;
+  let frameDt = 0;
 
   const syncSize = () => {
     const dpr = Math.min(window.devicePixelRatio || 1, 3);
@@ -204,6 +221,7 @@ export function createSlashOverlay(stage: HTMLElement): {
 
   const retractTrail = (now: number) => {
     const dt = lastPaint ? Math.min(0.05, (now - lastPaint) / 1000) : 0;
+    frameDt = dt;
     lastPaint = now;
     /** 无新点超过 still+80ms 才清速度，避免慢划事件稀被当成停下。 */
     const idleMs = Math.max(80, TRAIL.still * 1000 + 40);
@@ -444,6 +462,43 @@ export function createSlashOverlay(stage: HTMLElement): {
       ctx.fillText('黄=切开', 130, 38);
       ctx.restore();
     }
+
+    if (FX.chips && chips.length) {
+      const g = 980;
+      for (let i = chips.length - 1; i >= 0; i--) {
+        const c = chips[i];
+        c.life -= frameDt;
+        if (c.life <= 0) {
+          chips.splice(i, 1);
+          continue;
+        }
+        c.vy += g * frameDt;
+        c.x += c.vx * frameDt;
+        c.y += c.vy * frameDt;
+        c.rot += c.vr * frameDt;
+        const a = Math.max(0, c.life / c.max);
+        ctx.save();
+        ctx.translate(c.x, c.y);
+        ctx.rotate(c.rot);
+        ctx.fillStyle = `rgba(232, 196, 140,${0.25 + 0.7 * a})`;
+        ctx.fillRect(-c.r, -c.r * 0.35, c.r * 2, c.r * 0.7);
+        ctx.restore();
+      }
+    }
+
+    if (flashLeft > 0) {
+      flashLeft = Math.max(0, flashLeft - frameDt);
+      const a = flashLeft / Math.max(0.01, FX.flashLife);
+      ctx.save();
+      ctx.globalCompositeOperation = 'screen';
+      ctx.fillStyle = `rgba(255,255,255,${0.035 * a})`;
+      ctx.fillRect(0, 0, DESIGN_WIDTH, DESIGN_HEIGHT);
+      ctx.fillStyle = `rgba(255,70,90,${0.02 * a})`;
+      ctx.fillRect(-2, 0, DESIGN_WIDTH, DESIGN_HEIGHT);
+      ctx.fillStyle = `rgba(50,170,255,${0.02 * a})`;
+      ctx.fillRect(2, 0, DESIGN_WIDTH, DESIGN_HEIGHT);
+      ctx.restore();
+    }
   };
 
   const begin = () => {
@@ -526,6 +581,47 @@ export function createSlashOverlay(stage: HTMLElement): {
     clipFromHead(pts, Math.max(shownLen, TRAIL.maxLen));
   };
 
+  const burstChips = (
+    c0: DesignPoint,
+    c1: DesignPoint,
+    hit: number,
+  ) => {
+    if (!FX.chips) return;
+    const dx = c1.x - c0.x;
+    const dy = c1.y - c0.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const tx = dx / len;
+    const ty = dy / len;
+    const px = -ty;
+    const py = tx;
+    const n = Math.max(4, Math.round(FX.chipCount * (0.45 + 0.55 * hit)));
+    const spd = FX.chipSpeed * (0.55 + 0.45 * hit);
+    for (let i = 0; i < n; i++) {
+      const u = (i + Math.random() * 0.6) / n;
+      const side = i % 2 === 0 ? 1 : -1;
+      const jitter = (Math.random() - 0.5) * spd * 0.45;
+      chips.push({
+        x: c0.x + dx * u,
+        y: c0.y + dy * u,
+        vx: px * side * spd * (0.6 + Math.random() * 0.8) + tx * jitter,
+        vy: py * side * spd * (0.6 + Math.random() * 0.8) + ty * jitter,
+        life: FX.chipLife * (0.7 + Math.random() * 0.5),
+        max: FX.chipLife,
+        r:
+          Math.random() < 0.28
+            ? 2.5 + Math.random() * 2.2 * (0.55 + hit)
+            : 1.3 + Math.random() * 1.6 * (0.55 + hit),
+        rot: Math.random() * Math.PI,
+        vr: (Math.random() - 0.5) * 18,
+      });
+    }
+  };
+
+  const impactFlash = (hit: number) => {
+    if (hit < FX.flashAt) return;
+    flashLeft = FX.flashLife;
+  };
+
   const end = () => {
     emitting = false;
     crack = null;
@@ -563,6 +659,8 @@ export function createSlashOverlay(stage: HTMLElement): {
     setIntentDebug,
     flash,
     freezeFlash,
+    burstChips,
+    impactFlash,
     end,
     step,
     clear,

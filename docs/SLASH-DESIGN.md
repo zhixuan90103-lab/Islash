@@ -146,6 +146,8 @@ J = mass * targetSpeed
 
 入点 / 补切 / 已消费直线 / 刀光 / 夹缝 / 划痕参数见 [SLASH-INTENT.md](./SLASH-INTENT.md) 参数表（`START` `INTENT` `FLASH` `TRAIL`）。
 
+震屏（`SHAKE`）+ 切开特效（`FX`）：切开后顿帧期间两块沿法线挤压、切缝喷木屑；重砍（hit≥`flashAt`）短白闪+色差。解冻后冲量 × `burst` 再飞、再踢屏。
+
 ## 模块
 
 | 文件 | 职责 |
@@ -162,6 +164,7 @@ J = mass * targetSpeed
 | `woodChamfer.ts` | 半平面内收计划 + 封闭挤出网格 |
 | `wood.ts` | 生成/重置、meshFromProfile |
 | `slashWorld.ts` | 会话编排 |
+| `screenShake.ts` | 切开震屏（trauma + kick） |
 | `slashDebug.ts` | 夹缝、刀光、划痕 overlay |
 | `slashDebugPanel.ts` | `#ui-root` 调参 |
 | `index.ts` | `mountSlashWorld` |

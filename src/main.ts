@@ -107,7 +107,9 @@ async function boot(): Promise<void> {
 
   renderer.setAnimationLoop(() => {
     slash.step(clock.getDelta());
+    slash.applyView();
     renderer.render(scene, camera);
+    slash.restoreView();
   });
 
   window.addEventListener(

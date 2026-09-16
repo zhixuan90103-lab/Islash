@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 import { applyBladeImpulse, pieceVolume } from './bladeForce';
+import { FX, SHAKE } from './design';
+import { createScreenShake, cutHit } from './screenShake';
+import type { PhysBody } from './slashPhysics';
 import {
   consumeCutLine,
   crackAlongStroke,
@@ -21,6 +24,8 @@ import type { StageLayout } from '../adapt/design';
 
 export type SlashSession = {
   step: (dt: number) => void;
+  applyView: () => void;
+  restoreView: () => void;
   dispose: () => void;
 };
 
@@ -37,18 +42,28 @@ export async function mountSlashWorld(
 ): Promise<SlashSession> {
   const physics = await createSlashPhysics();
   const overlay = createSlashOverlay(stage);
+  const shake = createScreenShake(camera);
   const wood = createWoodSet(scene, physics);
   wood.spawn();
   let lastCommit: { c0: DesignPoint; c1: DesignPoint } | null = null;
+  let freezeLeft = 0;
+  const pendingKick: { hit: number; dir: THREE.Vector3 }[] = [];
+  const pendingFly: {
+    rec: PhysBody;
+    keep: THREE.Mesh;
+    drop: THREE.Mesh;
+    bladeDir: THREE.Vector3;
+    hitPoint: THREE.Vector3;
+    speedPx: number;
+    squeeze: THREE.Vector3;
+  }[] = [];
+  const _squeezeN = new THREE.Vector3();
 
   const replaceCut = (
     old: THREE.Mesh,
     a: THREE.Mesh,
     b: THREE.Mesh,
-    bladeDir: THREE.Vector3,
-    hitPoint: THREE.Vector3,
-    speedPx: number,
-  ): { keep: THREE.Mesh; drop: THREE.Mesh } => {
+  ): { keep: THREE.Mesh; drop: THREE.Mesh; rec: PhysBody } => {
     physics.removeMesh(old);
     scene.remove(old);
     old.geometry.dispose();
@@ -68,16 +83,27 @@ export async function mountSlashWorld(
     const rec = physics.addMesh(drop, 'convex');
     wood.track(drop);
 
-    applyBladeImpulse(
-      rec.body,
-      camera,
-      keep,
-      drop,
-      bladeDir,
-      hitPoint,
-      speedPx,
-    );
-    return { keep, drop };
+    return { keep, drop, rec };
+  };
+
+  const flushImpact = () => {
+    for (const p of pendingFly) {
+      p.keep.position.addScaledVector(p.squeeze, -1);
+      p.drop.position.addScaledVector(p.squeeze, 1);
+      applyBladeImpulse(
+        p.rec.body,
+        camera,
+        p.keep,
+        p.drop,
+        p.bladeDir,
+        p.hitPoint,
+        p.speedPx,
+        FX.burst,
+      );
+    }
+    pendingFly.length = 0;
+    for (const k of pendingKick) shake.hit(k.hit, k.dir);
+    pendingKick.length = 0;
   };
 
   const applyCommit = (
@@ -105,14 +131,43 @@ export async function mountSlashWorld(
       segmentSpeedPxPerSec(seg[0], seg[1], dtSec),
       80,
     );
-    replaceCut(
-      commit.mesh,
-      result.a,
-      result.b,
-      result.bladeDir,
-      result.hitPoint,
-      speedPx,
+    const volA = pieceVolume(result.a);
+    const volB = pieceVolume(result.b);
+    const dropVol = Math.min(volA, volB);
+    const keepVol = Math.max(volA, volB);
+    const pieces = replaceCut(commit.mesh, result.a, result.b);
+    const hit = cutHit(speedPx, dropVol, keepVol);
+    const freeze =
+      SHAKE.freezeMin + hit * (SHAKE.freezeMax - SHAKE.freezeMin);
+    freezeLeft = Math.min(
+      SHAKE.freezeMax * 1.25,
+      freezeLeft + Math.max(0, freeze),
     );
+    pendingKick.push({ hit, dir: result.bladeDir.clone() });
+    _squeezeN.subVectors(pieces.drop.position, pieces.keep.position);
+    if (_squeezeN.lengthSq() < 1e-10) _squeezeN.copy(result.normal);
+    _squeezeN.normalize();
+    const sq = new THREE.Vector3();
+    if (freezeLeft > 1e-4) {
+      sq.copy(_squeezeN).multiplyScalar(FX.squeeze * (0.45 + 0.55 * hit));
+      pieces.keep.position.add(sq);
+      pieces.drop.position.addScaledVector(sq, -1);
+    }
+    pendingFly.push({
+      rec: pieces.rec,
+      keep: pieces.keep,
+      drop: pieces.drop,
+      bladeDir: result.bladeDir.clone(),
+      hitPoint: result.hitPoint.clone(),
+      speedPx,
+      squeeze: sq,
+    });
+    overlay.burstChips(commit.c0, commit.c1, hit);
+    overlay.impactFlash(hit);
+    if (freezeLeft <= 1e-4) {
+      freezeLeft = 0;
+      flushImpact();
+    }
     lastCommit = { c0: commit.c0, c1: commit.c1 };
     consumeCutLine(stroke, commit.c0, commit.c1);
     const crack2 =
@@ -198,9 +253,18 @@ export async function mountSlashWorld(
 
   return {
     step: (dt) => {
-      physics.step(dt);
       overlay.step();
+      if (freezeLeft > 0) {
+        freezeLeft -= dt;
+        if (freezeLeft > 0) return;
+        freezeLeft = 0;
+        flushImpact();
+      }
+      physics.step(dt);
+      shake.step(dt);
     },
+    applyView: () => shake.applyView(),
+    restoreView: () => shake.restoreView(),
     dispose: () => {
       input.dispose();
       panel.dispose();

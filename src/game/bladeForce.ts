@@ -27,6 +27,7 @@ export function applyBladeImpulse(
   bladeDir: THREE.Vector3,
   hitPoint: THREE.Vector3,
   speedPxPerSec: number,
+  speedMul = 1,
 ): void {
   bboxWorldCenter(keep, _keepC);
   bboxWorldCenter(drop, _dropC);
@@ -49,7 +50,11 @@ export function applyBladeImpulse(
   // 改成 Δv ≈ impulseBase * kickToSpeed * 滑速系数，再夹速度。
   body.recomputeMassPropertiesFromColliders();
   const mass = Math.max(0.05, body.mass());
-  const targetSpeed = PHYS.impulseBase * PHYS.kickToSpeed * bladeSpeedScale(speedPxPerSec);
+  const targetSpeed =
+    PHYS.impulseBase *
+    PHYS.kickToSpeed *
+    bladeSpeedScale(speedPxPerSec) *
+    Math.max(0.2, speedMul);
   const J = mass * targetSpeed;
   _imp
     .copy(_t)
