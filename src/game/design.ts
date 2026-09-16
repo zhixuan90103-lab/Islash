@@ -24,8 +24,8 @@ export function bevelInset(_depth: number): number {
 
 /** 长宽高乘数，默认 1 = 保持 WOOD_SHAPE。lift 为相对画面中心的 Y。 */
 export const WOOD = {
-  width: 1,
-  height: 1,
+  width: 1.5,
+  height: 1.5,
   depth: 1,
   lift: 0,
 };
@@ -78,6 +78,17 @@ export const START = {
   fastSpeed: 160,
   /** 转角：按下后至少挪这么远才用刀向在两条近边里选入边。 */
   cornerMove: 10,
+  /** 快划补切：青线全长短于此时不帮，必须真出边。 */
+  assistMinChord: 80,
+  /** 快划帮助用最近这么多微段的中位速度，单段尖刺不算快。 */
+  speedWindow: 4,
+  /** 切开后刀尖离剩余木轮廓超过此距离，才允许下一刀 85% 补切。 */
+  assistLeave: 12,
+  /**
+   * 进出落在相邻边上时，切缝至少要占包围盒短边的这个比例。
+   * 挡尖角擦边；对角贯穿、大切角仍过。
+   */
+  cornerMinChord: 0.22,
 };
 
 export const START_DEFAULT = { ...START };
@@ -135,21 +146,23 @@ export const FLASH = {
   /** 刀光扫过总时长（秒）。 */
   life: 0.3,
   /** 刚从入边出来、还短时的中段半宽（最宽）。 */
-  coreW: 10,
+  coreW: 15,
   /** 拉满切缝时的中段半宽（最细）。 */
-  coreWMin: 1.1,
+  coreWMin: 1.65,
   /** 变长阶段占寿命比例；其余时间拉满后淡出。 */
   grow: 0.55,
+  /** 变长开始时已占全长的比例（避免第一帧过短）。 */
+  growStart: 0.28,
   /** 外发光模糊半径（设计 px），一层 shadowBlur。 */
-  glowW: 22,
+  glowW: 33,
   /** 沿夹缝方向拉长的最短刀光（设计 px）。短缝也按这个扫。 */
-  spanMin: 200,
+  spanMin: 300,
   /** 入端向外探出（px），刀光从板外起笔。 */
-  overshootBack: 48,
+  overshootBack: 72,
   /** 出端再甩出（px）。 */
-  overshoot: 28,
+  overshoot: 42,
   /** 再按 span 比例甩出。 */
-  overshootRatio: 0.1,
+  overshootRatio: 0.15,
   /** 预览（未切开）相对切开的亮度。 */
   previewAlpha: 0.72,
   /** 夹缝指尖（终点）线宽。 */

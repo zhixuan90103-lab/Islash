@@ -168,7 +168,9 @@ export function createSlashOverlay(stage: HTMLElement): {
       let fade = 1;
       if (age < grow) {
         const t = age / grow;
-        lenT = 1 - (1 - t) * (1 - t);
+        const e = 1 - (1 - t) * (1 - t);
+        const start = Math.max(0.04, Math.min(0.9, FLASH.growStart));
+        lenT = start + (1 - start) * e;
       } else {
         const t = (age - grow) / Math.max(0.08, 1 - grow);
         fade = (1 - t) * (1 - t);

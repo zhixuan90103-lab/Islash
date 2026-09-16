@@ -1,5 +1,5 @@
 import type * as THREE from 'three';
-import { FLASH, INTENT, START } from './design';
+import { FLASH, INTENT, SLASH, START } from './design';
 import {
   chordLength,
   clipBackToEnter,
@@ -9,6 +9,8 @@ import {
   rankedHullEdges,
   pointInConvexHull,
   projectMeshHull,
+  throughThreshold,
+  type ProjBox,
 } from './slashHit';
 import {
   emptyIntent,
@@ -65,6 +67,8 @@ export function headingAngleDeg(
 
 export function resetLock(stroke: SlashStroke): void {
   const early = stroke.intent.earlyFlashed;
+  const hold = stroke.intent.assistHold;
+  const speeds = stroke.intent.speedSamples;
   stroke.intent.locked = false;
   stroke.intent.stable = 0;
   stroke.intent.c0 = null;
@@ -72,6 +76,8 @@ export function resetLock(stroke: SlashStroke): void {
   stroke.intent.flashHot = false;
   stroke.intent.aimStable = 0;
   stroke.intent.earlyFlashed = early;
+  stroke.intent.assistHold = hold;
+  stroke.intent.speedSamples = speeds;
 }
 
 export function resetSlashIntent(stroke: SlashStroke): void {
@@ -90,6 +96,34 @@ function tipInAnyHull(
   return false;
 }
 
+function minDistToHulls(
+  meshes: THREE.Mesh[],
+  camera: THREE.Camera,
+  tip: DesignPoint,
+): number {
+  let min = Infinity;
+  for (const mesh of meshes) {
+    const proj = projectMeshHull(mesh, camera);
+    if (!proj) continue;
+    if (pointInConvexHull(tip, proj.hull)) return 0;
+    const near = rankedHullEdges(tip, proj.hull)[0];
+    if (near && near.dist < min) min = near.dist;
+  }
+  return min;
+}
+
+function maybeClearAssistHold(
+  stroke: SlashStroke,
+  live: THREE.Mesh[],
+  camera: THREE.Camera,
+  tip: DesignPoint,
+): void {
+  if (!stroke.intent.assistHold) return;
+  if (tipInAnyHull(live, camera, tip)) return;
+  if (minDistToHulls(live, camera, tip) < START.assistLeave) return;
+  stroke.intent.assistHold = false;
+}
+
 export function twoEdges(
   enterEdge: number,
   exitEdge: number,
@@ -102,6 +136,28 @@ export function twoEdges(
   return e !== x;
 }
 
+function adjacentEdges(enter: number, exit: number, n: number): boolean {
+  if (n < 3 || enter < 0 || exit < 0) return false;
+  const d = Math.abs(enter - exit);
+  return d === 1 || d === n - 1;
+}
+
+function slashDeepEnough(
+  c0: DesignPoint,
+  c1: DesignPoint,
+  enterEdge: number,
+  exitEdge: number,
+  hull: DesignPoint[],
+  box: ProjBox,
+): boolean {
+  const len = chordLength(c0, c1);
+  const base = Math.max(SLASH.minChord, throughThreshold(box));
+  const adj = adjacentEdges(enterEdge, exitEdge, hull.length);
+  const short = Math.min(box.maxX - box.minX, box.maxY - box.minY);
+  const need = adj ? Math.max(base, START.cornerMinChord * short) : base;
+  return len >= need;
+}
+
 function travelAlongCyan(
   c0: DesignPoint,
   c1: DesignPoint,
@@ -112,6 +168,15 @@ function travelAlongCyan(
   const full = hypot(ax, ay) || 1;
   const traveled = ((tip.x - c0.x) * ax + (tip.y - c0.y) * ay) / full;
   return traveled / full;
+}
+
+function pushSpeed(stroke: SlashStroke, speed: number): number {
+  const w = Math.max(1, START.speedWindow);
+  const s = stroke.intent.speedSamples;
+  s.push(speed);
+  if (s.length > w) s.splice(0, s.length - w);
+  const sorted = s.slice().sort((x, y) => x - y);
+  return sorted[Math.floor(sorted.length / 2)] ?? speed;
 }
 
 export function previewCutChord(
@@ -195,6 +260,7 @@ export function resolveCutBySegment(
   const live = meshes.filter(
     (m) => !stroke.slicedIds.has(m.id) && !skipIds.has(m.id),
   );
+  maybeClearAssistHold(stroke, live, camera, b);
 
   const trackedId = stroke.progress.size ? [...stroke.progress.keys()][0] : null;
 
@@ -218,21 +284,43 @@ export function resolveCutBySegment(
     const nowInside = pointInConvexHull(b, proj.hull);
     st.inside = nowInside;
     if (nowInside) {
-      const speed = segmentSpeedPxPerSec(a, b, dtSec);
+      if (stroke.intent.assistHold) return null;
+      const speed = pushSpeed(stroke, segmentSpeedPxPerSec(a, b, dtSec));
       if (speed < START.fastSpeed) return null;
       const line = clipInfiniteLineToHull(st.c0, b, proj.hull);
       if (!line) return null;
       const exit = line[1];
+      const full = chordLength(st.c0, exit);
+      if (full < START.assistMinChord) return null;
       const exitEdge = closestHullEdge(exit, proj.hull);
       if (!twoEdges(st.enterEdge, exitEdge, st.c0, exit, proj.hull)) return null;
+      const ang = headingAngleDeg(
+        b.x - a.x,
+        b.y - a.y,
+        exit.x - st.c0.x,
+        exit.y - st.c0.y,
+      );
+      if (ang > FLASH.aimAngle) return null;
       const ratio = travelAlongCyan(st.c0, exit, b);
       if (ratio < FLASH.minTravelRatio) return null;
+      if (
+        !slashDeepEnough(
+          st.c0,
+          exit,
+          st.enterEdge,
+          exitEdge,
+          proj.hull,
+          proj.box,
+        )
+      ) {
+        return null;
+      }
       stroke.progress.delete(trackedId);
       return {
         mesh,
         c0: st.c0,
         c1: exit,
-        chord: Math.max(st.chord, chordLength(st.c0, exit)),
+        chord: Math.max(st.chord, full),
       };
     }
 
@@ -241,6 +329,18 @@ export function resolveCutBySegment(
       : closestHullEdge(st.c1, proj.hull);
     stroke.progress.delete(trackedId);
     if (!twoEdges(st.enterEdge, exitEdge, st.c0, st.c1, proj.hull)) return null;
+    if (
+      !slashDeepEnough(
+        st.c0,
+        st.c1,
+        st.enterEdge,
+        exitEdge,
+        proj.hull,
+        proj.box,
+      )
+    ) {
+      return null;
+    }
     return { mesh, c0: st.c0, c1: st.c1, chord: st.chord };
   }
 
@@ -318,7 +418,12 @@ export function resolveCutBySegment(
       !insideB &&
       twoEdges(enterEdge, exitEdge, c0, c1, proj.hull)
     ) {
-      return { mesh, c0, c1, chord };
+      if (
+        slashDeepEnough(c0, c1, enterEdge, exitEdge, proj.hull, proj.box)
+      ) {
+        return { mesh, c0, c1, chord };
+      }
+      continue;
     }
 
     stroke.progress.set(mesh.id, {

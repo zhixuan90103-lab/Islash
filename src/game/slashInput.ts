@@ -24,6 +24,9 @@ export type SlashIntent = {
   earlyFlashed: boolean;
   flashHot: boolean;
   aimStable: number;
+  speedSamples: number[];
+  /** true：切开后尚未真正离开，85% 补切关掉；真出边仍切。 */
+  assistHold: boolean;
 };
 
 export function emptyIntent(): SlashIntent {
@@ -35,6 +38,8 @@ export function emptyIntent(): SlashIntent {
     earlyFlashed: false,
     flashHot: false,
     aimStable: 0,
+    speedSamples: [],
+    assistHold: false,
   };
 }
 

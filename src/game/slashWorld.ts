@@ -100,6 +100,7 @@ export async function mountSlashWorld(
     stroke.slicedIds.add(commit.mesh.id);
     stroke.progress.clear();
     resetSlashIntent(stroke);
+    stroke.intent.assistHold = true;
     stroke.awaitBlank = true;
     const speedPx = Math.max(
       segmentSpeedPxPerSec(seg[0], seg[1], dtSec),
