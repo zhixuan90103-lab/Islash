@@ -1,4 +1,8 @@
 import {
+  CUT,
+  CUT_DEFAULT,
+  FINALE,
+  FINALE_DEFAULT,
   FLASH,
   FLASH_DEFAULT,
   FX,
@@ -73,6 +77,16 @@ const FX_SLIDERS: SliderSpec[] = [
   { key: 'burst', label: '解冻加踢', min: 1, max: 2, step: 0.02 },
 ];
 
+const FINALE_SLIDERS: SliderSpec[] = [
+  { key: 'finishRemain', label: '完成剩余', min: 0.04, max: 0.4, step: 0.02 },
+  { key: 'freeze', label: '终刀顿帧', min: 0.04, max: 0.25, step: 0.01 },
+  { key: 'scale', label: '慢放倍率', min: 0.06, max: 0.4, step: 0.02 },
+  { key: 'kickMul', label: '终刀踢倍', min: 1, max: 5, step: 0.1 },
+  { key: 'bladeScale', label: '终刀光倍', min: 1, max: 4, step: 0.1 },
+  { key: 'bladeSpan', label: '终刀光长', min: 160, max: 700, step: 10 },
+  { key: 'flashPeak', label: '终闪白', min: 0.02, max: 0.5, step: 0.01 },
+];
+
 const SHAKE_SLIDERS: SliderSpec[] = [
   { key: 'trauma', label: '每刀创伤', min: 0.05, max: 1, step: 0.05 },
   { key: 'decay', label: '创伤衰减', min: 1, max: 16, step: 0.5 },
@@ -134,6 +148,8 @@ export function mountSlashDebugPanel(
       <div class="debug-trail"></div>
       <p class="debug-sec">意图</p>
       <div class="debug-intent"></div>
+      <p class="debug-sec">最后一刀</p>
+      <div class="debug-finale"></div>
       <p class="debug-sec">切开特效</p>
       <div class="debug-fx"></div>
       <p class="debug-sec">震屏</p>
@@ -145,6 +161,7 @@ export function mountSlashDebugPanel(
         <button type="button" data-act="phys">重置物理</button>
         <button type="button" data-act="trail">重置拖尾</button>
         <button type="button" data-act="intent">重置意图</button>
+        <button type="button" data-act="finale">重置终刀</button>
         <button type="button" data-act="fx">重置特效</button>
         <button type="button" data-act="shake">重置震屏</button>
         <button type="button" data-act="flash">重置刀光</button>
@@ -159,6 +176,7 @@ export function mountSlashDebugPanel(
   const list = wrap.querySelector('.debug-sliders') as HTMLElement;
   const trailList = wrap.querySelector('.debug-trail') as HTMLElement;
   const intentList = wrap.querySelector('.debug-intent') as HTMLElement;
+  const finaleList = wrap.querySelector('.debug-finale') as HTMLElement;
   const fxList = wrap.querySelector('.debug-fx') as HTMLElement;
   const shakeList = wrap.querySelector('.debug-shake') as HTMLElement;
   const flashList = wrap.querySelector('.debug-flash') as HTMLElement;
@@ -271,6 +289,31 @@ export function mountSlashDebugPanel(
     intentInputs.push({ spec, input, val });
   }
 
+  const finaleBag = (key: string) =>
+    key === 'finishRemain' ? CUT : FINALE;
+
+  const finaleInputs: { spec: SliderSpec; input: HTMLInputElement; val: HTMLSpanElement }[] =
+    [];
+
+  for (const spec of FINALE_SLIDERS) {
+    const row = document.createElement('label');
+    row.className = 'debug-row';
+    const bag = finaleBag(spec.key) as Record<string, number>;
+    const cur = bag[spec.key];
+    row.innerHTML = `<span>${spec.label}</span><input type="range" min="${spec.min}" max="${spec.max}" step="${spec.step}" /><span class="debug-val"></span>`;
+    const input = row.querySelector('input')!;
+    const val = row.querySelector('.debug-val') as HTMLSpanElement;
+    input.value = String(cur);
+    val.textContent = Number(cur).toFixed(spec.step < 1 ? 2 : 0);
+    input.addEventListener('input', () => {
+      const n = Number(input.value);
+      bag[spec.key] = n;
+      val.textContent = n.toFixed(spec.step < 1 ? 2 : 0);
+    });
+    finaleList.appendChild(row);
+    finaleInputs.push({ spec, input, val });
+  }
+
   const fxInputs: { spec: SliderSpec; input: HTMLInputElement; val: HTMLSpanElement }[] =
     [];
 
@@ -354,6 +397,11 @@ export function mountSlashDebugPanel(
       input.value = String(n);
       val.textContent = n.toFixed(spec.step < 1 ? 2 : 0);
     }
+    for (const { spec, input, val } of finaleInputs) {
+      const n = (finaleBag(spec.key) as Record<string, number>)[spec.key];
+      input.value = String(n);
+      val.textContent = n.toFixed(spec.step < 1 ? 2 : 0);
+    }
     for (const { spec, input, val } of fxInputs) {
       const n = FX[spec.key as keyof typeof FX];
       input.value = String(n);
@@ -391,6 +439,12 @@ export function mountSlashDebugPanel(
   wrap.querySelector('[data-act="intent"]')!.addEventListener('click', (e) => {
     e.stopPropagation();
     Object.assign(INTENT, INTENT_DEFAULT);
+    sync();
+  });
+  wrap.querySelector('[data-act="finale"]')!.addEventListener('click', (e) => {
+    e.stopPropagation();
+    Object.assign(CUT, CUT_DEFAULT);
+    Object.assign(FINALE, FINALE_DEFAULT);
     sync();
   });
   wrap.querySelector('[data-act="fx"]')!.addEventListener('click', (e) => {

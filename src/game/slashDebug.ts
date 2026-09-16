@@ -1,5 +1,5 @@
 import { DESIGN_HEIGHT, DESIGN_WIDTH } from '../adapt/design';
-import { FLASH, FX, INTENT, TRAIL } from './design';
+import { FINALE, FLASH, FX, INTENT, TRAIL } from './design';
 import type { DesignPoint } from './slashInput';
 
 export type IntentDebug = {
@@ -111,18 +111,28 @@ type FlashSeg = {
   c1: DesignPoint;
   born: number;
   follow: boolean;
+  finale?: boolean;
 };
 
 /** 方向跟夹缝，长度拉到 spanMin 再甩出出端。 */
 function flashAxis(
   c0: DesignPoint,
   c1: DesignPoint,
+  finale = false,
 ): [DesignPoint, DesignPoint] {
   const dx = c1.x - c0.x;
   const dy = c1.y - c0.y;
   const len = Math.hypot(dx, dy) || 1;
   const ux = dx / len;
   const uy = dy / len;
+  if (finale) {
+    const mid = { x: (c0.x + c1.x) * 0.5, y: (c0.y + c1.y) * 0.5 };
+    const half = Math.max(len * 0.5, FINALE.bladeSpan * 0.5);
+    return [
+      { x: mid.x - ux * half, y: mid.y - uy * half },
+      { x: mid.x + ux * half, y: mid.y + uy * half },
+    ];
+  }
   const span =
     Math.max(len, FLASH.spanMin) * (1 + FLASH.overshootRatio) + FLASH.overshoot;
   const back = FLASH.overshootBack;
@@ -174,6 +184,7 @@ export function createSlashOverlay(stage: HTMLElement): {
   setPredicted: (points: DesignPoint[]) => void;
   setIntentDebug: (info: IntentDebug | null) => void;
   flash: (c0: DesignPoint, c1: DesignPoint, follow?: boolean) => void;
+  finaleFlash: (c0: DesignPoint, c1: DesignPoint) => void;
   freezeFlash: () => void;
   burstChips: (c0: DesignPoint, c1: DesignPoint, hit: number) => void;
   impactFlash: (hit: number) => void;
@@ -202,6 +213,7 @@ export function createSlashOverlay(stage: HTMLElement): {
   let filt: DesignPoint | null = null;
   const chips: Chip[] = [];
   let flashLeft = 0;
+  let flashPeak = 0.035;
   let frameDt = 0;
 
   const syncSize = () => {
@@ -246,7 +258,6 @@ export function createSlashOverlay(stage: HTMLElement): {
     wipe();
     retractTrail(now);
 
-    const flashLifeMs = FLASH.life * 1000;
     const dpr = canvas.width / DESIGN_WIDTH;
 
     if (crack) {
@@ -276,9 +287,14 @@ export function createSlashOverlay(stage: HTMLElement): {
       }
     }
 
-    const drawFlash = (c0: DesignPoint, c1: DesignPoint, age: number) => {
+    const drawFlash = (
+      c0: DesignPoint,
+      c1: DesignPoint,
+      age: number,
+      finale = false,
+    ) => {
       if (!FLASH.show || age <= 0 || age >= 1) return;
-      const [a, b] = flashAxis(c0, c1);
+      const [a, b] = flashAxis(c0, c1, finale);
       const grow = Math.max(0.12, Math.min(0.85, FLASH.grow));
       let lenT = 1;
       let fade = 1;
@@ -291,16 +307,23 @@ export function createSlashOverlay(stage: HTMLElement): {
         const t = (age - grow) / Math.max(0.08, 1 - grow);
         fade = (1 - t) * (1 - t);
       }
-      const u0 = 0;
-      const u1 = Math.max(0.06, lenT);
+      const scale = finale ? FINALE.bladeScale : 1;
       const halfW =
-        (FLASH.coreW * (1 - lenT) + FLASH.coreWMin * lenT) * fade;
-      if (u1 - u0 < 0.02 || halfW < 0.08 || fade < 0.03) return;
-      const tail = lerpPt(a, b, u0);
-      const head = lerpPt(a, b, u1);
+        (FLASH.coreW * (1 - lenT) + FLASH.coreWMin * lenT) * fade * scale;
+      if (halfW < 0.08 || fade < 0.03) return;
+      const tail = finale
+        ? lerpPt({ x: (a.x + b.x) * 0.5, y: (a.y + b.y) * 0.5 }, a, lenT)
+        : lerpPt(a, b, 0);
+      const head = finale
+        ? lerpPt({ x: (a.x + b.x) * 0.5, y: (a.y + b.y) * 0.5 }, b, lenT)
+        : lerpPt(a, b, Math.max(0.06, lenT));
       ctx.save();
       ctx.shadowColor = `rgba(210, 235, 255, ${0.85 * fade})`;
-      ctx.shadowBlur = FLASH.glowW * dpr * Math.max(0.2, fade);
+      ctx.shadowBlur =
+        FLASH.glowW *
+        (finale ? FINALE.glowScale : 1) *
+        dpr *
+        Math.max(0.2, fade);
       ctx.shadowOffsetX = 0;
       ctx.shadowOffsetY = 0;
       paintSpindle(
@@ -315,14 +338,15 @@ export function createSlashOverlay(stage: HTMLElement): {
 
     for (let i = flashes.length - 1; i >= 0; i--) {
       const f = flashes[i];
-      const age = (now - f.born) / flashLifeMs;
+      const lifeMs = (f.finale ? FINALE.bladeLife : FLASH.life) * 1000;
+      const age = (now - f.born) / lifeMs;
       if (age >= 1) {
         flashes.splice(i, 1);
         continue;
       }
       const c0 = f.follow && crack ? crack.c0 : f.c0;
       const c1 = f.follow && crack ? crack.c1 : f.c1;
-      drawFlash(c0, c1, age);
+      drawFlash(c0, c1, age, !!f.finale);
     }
 
     const ribbon = splineRibbon(pts, TRAIL.subdiv);
@@ -491,7 +515,7 @@ export function createSlashOverlay(stage: HTMLElement): {
       const a = flashLeft / Math.max(0.01, FX.flashLife);
       ctx.save();
       ctx.globalCompositeOperation = 'screen';
-      ctx.fillStyle = `rgba(255,255,255,${0.035 * a})`;
+      ctx.fillStyle = `rgba(255,255,255,${flashPeak * a})`;
       ctx.fillRect(0, 0, DESIGN_WIDTH, DESIGN_HEIGHT);
       ctx.fillStyle = `rgba(255,70,90,${0.02 * a})`;
       ctx.fillRect(-2, 0, DESIGN_WIDTH, DESIGN_HEIGHT);
@@ -537,6 +561,13 @@ export function createSlashOverlay(stage: HTMLElement): {
   const flash = (c0: DesignPoint, c1: DesignPoint, follow = false) => {
     flashes.length = 0;
     flashes.push({ c0, c1, born: performance.now(), follow });
+  };
+
+  const finaleFlash = (c0: DesignPoint, c1: DesignPoint) => {
+    flashes.length = 0;
+    flashes.push({ c0, c1, born: performance.now(), follow: false, finale: true });
+    flashPeak = FINALE.flashPeak;
+    flashLeft = Math.max(FX.flashLife, 0.09);
   };
 
   const freezeFlash = () => {
@@ -619,6 +650,7 @@ export function createSlashOverlay(stage: HTMLElement): {
 
   const impactFlash = (hit: number) => {
     if (hit < FX.flashAt) return;
+    flashPeak = 0.035;
     flashLeft = FX.flashLife;
   };
 
@@ -658,6 +690,7 @@ export function createSlashOverlay(stage: HTMLElement): {
     setPredicted,
     setIntentDebug,
     flash,
+    finaleFlash,
     freezeFlash,
     burstChips,
     impactFlash,

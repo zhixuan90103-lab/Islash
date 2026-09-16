@@ -32,7 +32,7 @@ export function cutHit(speedPxPerSec: number, dropVol: number, keepVol: number):
 }
 
 export function createScreenShake(camera: THREE.PerspectiveCamera): {
-  hit: (amount: number, dir: THREE.Vector3) => void;
+  hit: (amount: number, dir: THREE.Vector3, kickMul?: number) => void;
   step: (dt: number) => void;
   applyView: () => void;
   restoreView: () => void;
@@ -48,9 +48,10 @@ export function createScreenShake(camera: THREE.PerspectiveCamera): {
   let toY = 0;
   let phase: 'idle' | 'attack' | 'settle' = 'idle';
   let age = 0;
+  let kickScale = 1;
 
   const capKick = () => {
-    const max = SHAKE.kick * 1.6;
+    const max = SHAKE.kick * kickScale * 1.8;
     const len = Math.hypot(toX, toY);
     if (len > max && len > 1e-8) {
       const s = max / len;
@@ -60,9 +61,10 @@ export function createScreenShake(camera: THREE.PerspectiveCamera): {
   };
 
   return {
-    hit: (amount, dir) => {
+    hit: (amount, dir, kickMul = 1) => {
       if (!SHAKE.show) return;
       const hit = Math.min(1, Math.max(0, amount));
+      kickScale = Math.max(1, kickMul);
       trauma = Math.min(1, trauma + hit * SHAKE.trauma);
       _dir.copy(dir);
       _dir.z = 0;
@@ -70,8 +72,8 @@ export function createScreenShake(camera: THREE.PerspectiveCamera): {
       else _dir.normalize();
       fromX = px;
       fromY = py;
-      toX = px - _dir.x * hit * SHAKE.kick;
-      toY = py - _dir.y * hit * SHAKE.kick;
+      toX = px - _dir.x * hit * SHAKE.kick * kickScale;
+      toY = py - _dir.y * hit * SHAKE.kick * kickScale;
       capKick();
       phase = 'attack';
       age = 0;

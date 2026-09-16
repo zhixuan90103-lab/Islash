@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { applyBladeImpulse, pieceVolume } from './bladeForce';
-import { CUT, FX, SHAKE } from './design';
+import { CUT, FINALE, FX, SHAKE } from './design';
 import { createScreenShake, cutHit } from './screenShake';
 import type { PhysBody } from './slashPhysics';
 import {
@@ -60,9 +60,12 @@ export async function mountSlashWorld(
     freezeLeft: number;
     hit: number;
     dir: THREE.Vector3;
+    finish: boolean;
+    chord: { c0: DesignPoint; c1: DesignPoint };
   }[] = [];
   const _squeezeN = new THREE.Vector3();
   const _zero = { x: 0, y: 0, z: 0 };
+  let slowLeft = 0;
 
   const replaceCut = (
     old: THREE.Mesh,
@@ -123,6 +126,7 @@ export async function mountSlashWorld(
     p.rec.body.setGravityScale(1, true);
     p.keep.position.copy(p.keepRest);
     p.drop.position.copy(p.dropRest);
+    const burst = p.finish ? FX.burst * FINALE.burst : FX.burst;
     applyBladeImpulse(
       p.rec.body,
       camera,
@@ -131,7 +135,7 @@ export async function mountSlashWorld(
       p.bladeDir,
       p.hitPoint,
       p.speedPx,
-      FX.burst,
+      burst,
     );
     if (p.recKeep) {
       p.recKeep.body.setGravityScale(1, true);
@@ -143,10 +147,11 @@ export async function mountSlashWorld(
         p.bladeDir,
         p.hitPoint,
         p.speedPx,
-        FX.burst,
+        burst,
       );
     }
-    shake.hit(p.hit, p.dir);
+    shake.hit(p.hit, p.dir, p.finish ? FINALE.kickMul : 1);
+    if (p.finish) slowLeft = 0;
   };
 
   const applyCommit = (
@@ -183,8 +188,9 @@ export async function mountSlashWorld(
     const finish = keepVol < originVol * CUT.finishRemain;
     const pieces = replaceCut(commit.mesh, result.a, result.b, finish);
     const hit = cutHit(speedPx, dropVol, keepVol);
-    const freeze =
-      SHAKE.freezeMin + hit * (SHAKE.freezeMax - SHAKE.freezeMin);
+    const freeze = finish
+      ? FINALE.freeze
+      : SHAKE.freezeMin + hit * (SHAKE.freezeMax - SHAKE.freezeMin);
     _squeezeN.subVectors(pieces.drop.position, pieces.keep.position);
     if (_squeezeN.lengthSq() < 1e-10) _squeezeN.copy(result.normal);
     _squeezeN.normalize();
@@ -210,15 +216,20 @@ export async function mountSlashWorld(
       freezeLeft: freeze,
       hit,
       dir: result.bladeDir.clone(),
+      finish,
+      chord: { c0: commit.c0, c1: commit.c1 },
     };
+    overlay.burstChips(commit.c0, commit.c1, hit);
+    if (finish) {
+      overlay.finaleFlash(commit.c0, commit.c1);
+      if (freeze > 1e-4) slowLeft = freeze;
+    } else overlay.impactFlash(hit);
     if (freeze <= 1e-4) {
       releaseCut(pending);
     } else {
       pinDrop(pending);
       pendingFly.push(pending);
     }
-    overlay.burstChips(commit.c0, commit.c1, hit);
-    overlay.impactFlash(hit);
     lastCommit = { c0: commit.c0, c1: commit.c1 };
     consumeCutLine(stroke, commit.c0, commit.c1);
     const crack2 =
@@ -232,7 +243,7 @@ export async function mountSlashWorld(
     if (crack2) overlay.setCrack(crack2.c0, crack2.c1);
     else overlay.setCrack(null);
     overlay.freezeFlash();
-    if (commitFlash) overlay.flash(commit.c0, commit.c1, false);
+    if (!finish && commitFlash) overlay.flash(commit.c0, commit.c1, false);
     report(finish ? '完成切割' : '已切开');
     return true;
   };
@@ -240,7 +251,10 @@ export async function mountSlashWorld(
   const uiRoot = document.getElementById('ui-root');
   const panel = uiRoot
     ? mountSlashDebugPanel(uiRoot, {
-        onWoodChange: () => wood.spawn(),
+        onWoodChange: () => {
+          wood.spawn();
+          slowLeft = 0;
+        },
         onGravityChange: (y) => physics.setGravityY(y),
       })
     : { dispose: () => {} };
@@ -314,7 +328,9 @@ export async function mountSlashWorld(
           releaseCut(p);
         }
       }
-      physics.step(dt);
+      const slowing = slowLeft > 0;
+      if (slowing) slowLeft = Math.max(0, slowLeft - dt);
+      physics.step(slowing ? dt * FINALE.scale : dt);
       for (const p of pendingFly) {
         p.keep.position.copy(p.keepRest).add(p.squeeze);
         p.drop.position.copy(p.dropRest).addScaledVector(p.squeeze, -1);

@@ -20,7 +20,7 @@
 5. **切开**：用刀线切开 **2D 轮廓**（`userData.profile`），每块按同一配方重新挤出。删旧 mesh，加两块。面积×厚度大的留下（static），小的变 dynamic。子块继承整板 `originVolume`。
 6. **刀向**：入点→出点（设计坐标投到板面 XY）。冲量用法线 `Cross(刀向, 相机朝向)`，退化时 `camera.up`。
 7. **未完成时只踢被砍下的块**。留下的块不位移、不给冲量、不做体积质心平移。
-7b. **完成切割**：切开后较大块体积 `< originVolume * CUT.finishRemain`（默认 0.1）。该刀两块都变 dynamic，各自按刀向 + 相对法线踢飞，不再留下 static。
+7b. **完成切割**：切开后较大块体积 `< originVolume * CUT.finishRemain`（默认 0.1）。该刀两块都变 dynamic，各自按刀向 + 相对法线踢飞，不再留下 static。演出：先顿 → 慢放飞出 → 镜头/时间恢复，见 [SLASH-FEEL.md](./SLASH-FEEL.md)「最后一刀」。
 8. **飞出块**绕体积质心。质量/惯量 = Rapier 密度 × 碰撞体。无地面。
 9. **不伪造**「重的一侧向下」的额外力矩。
 10. **触控**走 `clientToDesign`；letterbox 外忽略。调试面板 `stopPropagation`，不抢刀。

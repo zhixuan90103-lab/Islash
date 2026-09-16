@@ -47,6 +47,27 @@ export const CUT = {
 
 export const CUT_DEFAULT = { ...CUT };
 
+/** 完成切割演出：先顿 → 慢放飞出 → 镜头/时间回 rest。 */
+export const FINALE = {
+  /** 顿帧（秒），只冻这一刀两块。 */
+  freeze: 0.1,
+  /** 出刀光到完全切开之间的慢放（秒）。与顿帧对齐；切开后立刻 1×。 */
+  slow: 0.1,
+  /** 物理 dt 倍率。越小越慢。 */
+  scale: 0.12,
+  kickMul: 2.4,
+  burst: 1.45,
+  bladeScale: 1.55,
+  glowScale: 1.25,
+  /** 终刀光全长（设计 px），以切缝中点为中心向两边伸。 */
+  bladeSpan: 380,
+  bladeLife: 0.5,
+  /** 终刀闪白峰值透明度。 */
+  flashPeak: 0.22,
+};
+
+export const FINALE_DEFAULT = { ...FINALE };
+
 export const VIEW = {
   fov: 45,
   cameraZ: 6.2,

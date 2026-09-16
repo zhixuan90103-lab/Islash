@@ -12,4 +12,5 @@ export {
   SHAKE,
   FX,
   CUT,
+  FINALE,
 } from './design';

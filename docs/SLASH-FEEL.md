@@ -85,6 +85,19 @@ Kick 方向 = 切开 `bladeDir`（入点→出点）。`camera.position` 反向�
 
 细则与调研对比：[SLASH-TRAIL.md](./SLASH-TRAIL.md)。意图叠层：[SLASH-INTENT.md](./SLASH-INTENT.md)。
 
+## 最后一刀（`finish`）
+
+较大块体积 `< originVolume * CUT.finishRemain` 时触发。时间轴：
+
+1. **出刀光即慢放**：终刀大刀光一出，物理 `×0.12`。顿帧期间两块仍钉住。镜头不推、不平移。  
+2. **完全切开瞬间恢复**：解冻飞出的那一帧慢放关掉，块以 1× 飞开。
+
+| 键 | 默认 | 作用 |
+|----|------|------|
+| freeze / scale | 0.1 / 0.12 | 顿=慢放窗口；物理倍率 |
+| kickMul / burst | 2.4 / 1.45 | 踢屏与冲量倍率 |
+| bladeScale / bladeLife / flashPeak | 2.4 / 0.5 / 0.11 | 刀光、寿命、闪白 |
+
 ## 模块
 
 | 文件 | 职责 |
