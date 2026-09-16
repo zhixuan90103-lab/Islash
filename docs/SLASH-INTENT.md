@@ -101,7 +101,7 @@
 
 ### 划痕（`TRAIL`）
 
-手指折线。`predictAlpha` 0：系统预测点不画，避免空白处像刀光。
+手指折线，**最长 `maxLen`**（默认 200px），不是「滑多快就多长」。停手（速度 < `stopSpeed`）或抬手：尾巴沿路径收到指尖，满长收回约 `life` 秒。宽度按距刀尖的路径长度，刀尖宽、尾细；刀尖沿前进方向探出三角（`tipLen`）。`predictAlpha` 0：系统预测点不画。
 
 ### 对缝调试
 
@@ -150,7 +150,7 @@
 
 ### `TRAIL`
 
-`show` 1、`life` 0.24、`headW` 5、`tailW` 0、`predictAlpha` 0。
+`show` 1、`maxLen` 200、`life` 0.4（收回）、`stopSpeed` 16、`minDist` 1.5、`smooth` 0.018、`subdiv` 6、`headW` 5、`tailW` 0、`tipLen` 10、`predictAlpha` 0。
 
 ### `SLASH`（提交深度，真源在设计总则）
 

@@ -38,10 +38,15 @@ const PHYS_SLIDERS: SliderSpec[] = [
 ];
 
 const TRAIL_SLIDERS: SliderSpec[] = [
-  { key: 'life', label: '拖尾寿命', min: 0.08, max: 1.2, step: 0.02 },
+  { key: 'maxLen', label: '拖尾最长', min: 24, max: 220, step: 2 },
+  { key: 'life', label: '收回时长', min: 0.06, max: 0.6, step: 0.02 },
+  { key: 'stopSpeed', label: '停手速度', min: 4, max: 160, step: 2 },
   { key: 'minDist', label: '拖尾间距', min: 0.5, max: 16, step: 0.5 },
+  { key: 'smooth', label: '低通秒', min: 0, max: 0.08, step: 0.002 },
+  { key: 'subdiv', label: '曲线细分', min: 1, max: 12, step: 1 },
   { key: 'headW', label: '刀尖宽', min: 1, max: 28, step: 0.5 },
   { key: 'tailW', label: '尾宽', min: 0, max: 8, step: 0.1 },
+  { key: 'tipLen', label: '三角尖', min: 0, max: 28, step: 0.5 },
 ];
 
 const INTENT_SLIDERS: SliderSpec[] = [

@@ -152,7 +152,6 @@ export async function mountSlashWorld(
       overlay.setPredicted(points);
     },
     onMove: (stroke, lastSeg, dtSec) => {
-      overlay.push(lastSeg[1]);
       const frame = stepSlashIntent(
         wood.cuttables.slice(),
         camera,
