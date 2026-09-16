@@ -3,7 +3,7 @@
 参数真源：`src/game/design.ts`。手感只改那里（或调试面板，写的是同一份对象）。不要在其它模块再写魔法数。
 
 调研：[SLASH-RESEARCH.md](./SLASH-RESEARCH.md)（玩法参考）、[SLASH-TECH.md](./SLASH-TECH.md)（连续切输入）。  
-意图：[SLASH-INTENT.md](./SLASH-INTENT.md)（入点 / 补切 / 刀光 / 夹缝）。  
+意图：[SLASH-INTENT.md](./SLASH-INTENT.md)（入点 / 补切 / 已消费直线 / 刀光 / 夹缝）。  
 本文是**当前工程已落地的规则**。调研里的「Box 三角剖分 / 不做物理」已被覆盖。
 
 ## 一句话
@@ -13,7 +13,7 @@
 ## 规则
 
 1. **一刀成立**：进出落在**两条不同凸包边上**，且切缝够深（`minChord` / `hullChordRatio`）。同一条边蹭不算。终点帮助：对准青线且行程 ≥ T(速度) 时可补出点；最慢须 100% 真出边。
-2. **下一刀**：切开成功后该刀线被本划消费。走廊内沿该方向的续滑不再出刀；横走或折返后可再切。同一按住可以多刀。
+2. **下一刀**：同一按住可以多刀，但一刀是一条 A→B，不是一次按下。网格切开成功后该有向直线被本划消费；走廊内沿该方向的续滑（含真出边、对留下块再锁 A）不再出刀。横走出走廊或沿该线折返后可再切。细则见意图文。
 3. **命中**：微段与轮廓求交；刀线用入点→出点。从板外进，或起点打分锁 A。板心按下再拖出不记刀。抬手停在板内不切。
 4. **反馈**：夹缝（入边→刀尖）在下，刀光在中，手指划痕在上。刀光不等于提交。细则见意图文。
 5. **切开**：用刀线切开 **2D 轮廓**（`userData.profile`），每块按同一配方重新挤出。删旧 mesh，加两块。面积×厚度大的留下（static），小的变 dynamic。
@@ -144,7 +144,7 @@ J = mass * targetSpeed
 
 `SLASH`：`armDist` 8、`interpGap` 5、`minChord` 8、`hullChordRatio` 0.08。提交时弦长必须够深。
 
-入点 / 补切 / 刀光 / 夹缝 / 划痕参数见 [SLASH-INTENT.md](./SLASH-INTENT.md) 参数表（`START` `INTENT` `FLASH` `TRAIL`）。
+入点 / 补切 / 已消费直线 / 刀光 / 夹缝 / 划痕参数见 [SLASH-INTENT.md](./SLASH-INTENT.md) 参数表（`START` `INTENT` `FLASH` `TRAIL`）。
 
 ## 模块
 
@@ -152,9 +152,9 @@ J = mass * targetSpeed
 |------|------|
 | `design.ts` | 全部可调参数 |
 | `backdrop.ts` | 水色径向背景贴 `scene.background` |
-| `slashInput.ts` | 指针折线、出刃、滑速 |
+| `slashInput.ts` | 指针折线、出刃、滑速；本划 `consumed[]` |
 | `slashHit.ts` | 轮廓、射线、点在凸包 |
-| `slashIntent.ts` | 意图状态机：入点、何时落刀、夹缝/青线、提前刀光 |
+| `slashIntent.ts` | 意图：锁 A、补切、消费走廊、夹缝/青线、提前刀光 |
 | `slashCut.ts` | 板面 XY 上切轮廓，重建两块网格 |
 | `bladeForce.ts` | 冲量合成、质量归一、夹速度；体积用轮廓面积 |
 | `slashPhysics.ts` | Rapier；仅飞出块做体积质心；留下块 fixed |

@@ -1,7 +1,10 @@
 # 连续滑动切割 — 技术检索
 
 玩法结论：[SLASH-RESEARCH.md §5](./SLASH-RESEARCH.md)。  
-本文只写 **怎么实现**：刃活着、段检测、划中换网格。栈：本仓 Pointer Events + 设计坐标 + **2D 轮廓切开**（`slashCut.ts` / `woodProfile.ts` / `woodChamfer.ts`）+ Rapier。网格做法见 [SLASH-DESIGN.md](./SLASH-DESIGN.md)「几何」。
+当前落刀政策（帮助、已消费直线、走廊）：[SLASH-INTENT.md](./SLASH-INTENT.md)。  
+本文只写 **怎么实现输入与换网格**：刃活着、段检测、划中换网格。栈：本仓 Pointer Events + 设计坐标 + **2D 轮廓切开**（`slashCut.ts` / `woodProfile.ts` / `woodChamfer.ts`）+ Rapier。网格做法见 [SLASH-DESIGN.md](./SLASH-DESIGN.md)「几何」。
+
+> 检索时写过「keep 钉在原地，同一划必再碰到新网格，所以新块必须可切」。那是**换网格不要漏下一刀**的工程约束。政策上：同一条已交刀直线的余势（走廊内沿该方向刮留下的切面）**不再出刀**；横走或折返才是新刀。不要把本节的 `bornThisSeg` / 新块可切读成「沿同一缝再切一次」。
 
 ## 1. 参考实现（已读源）
 
@@ -96,7 +99,7 @@ Unity 用移动的 trigger 球扫过水果。WebGPU 没有等价的每帧物理 
 - 刀面：`setFromCoplanarPoints(camera, world(seg.a), world(seg.b))`，与现逻辑一致，只是两端改成段而不是整刀。  
 - 冲量方向：这一段的设计坐标差 → 世界刀向。滑速用 **段速度**（`|seg| / dt`）比整划平均更跟手。整划平均可留作下限。  
 - Rapier：删旧 `RigidBody` + collider，新 convex hull，`recomputeMassPropertiesFromColliders` 后再 `applyImpulseAtPoint`。不要在 `world.step` 中间切；输入回调里切完，等下一帧 `step`。  
-- 留下块保持 static，连续切的是还钉在原处的大块——这正是 iSlash「一划连切剩余木」需要的。
+- 留下块保持 static，后续微段仍能碰到新网格。能否再切由意图消费走廊决定，不是「碰到 keep 就再切一刀」。
 
 ## 5. 隧道（快划漏切）
 
@@ -151,7 +154,7 @@ function tryCutSeg(stroke, seg):
 | 插值后每小段都会拿去切 | 插值只往 `points` 里塞点；`onMove` **每个 coalesced 事件调用一次**，参数仍是整刀。 |
 | coalesced 已够防漏划 | 方法存在，但真机依赖见 §10。本仓真正防隧道的是 `INTERP_GAP=5`。 |
 | 段一过 `minChord` / `throughThreshold(box)` 就切 | 板投影宽可达上百 px，而微段只有 ~5px。**单段永远达不到「划穿整板」阈值。** 连续切若只看 lastSeg，会永远切不到，或只能改成「碰到即切」。 |
-| Fruit Ninja 连续切 ≈ 本仓连切剩余木 | 水果切开就飞走，半果几乎不会再被同一刃切。本仓 **keep 钉在原地**，同一划必再碰到新网格。`bornThisSeg` 不是优化，是正确性。 |
+| Fruit Ninja 连续切 ≈ 本仓连切剩余木 | 水果切开就飞走，半果几乎不会再被同一刃切。本仓 **keep 钉在原地**，同一划必再碰到新网格。`bornThisSeg` 避免同一微段切两次新生 mesh；**沿已切直线刮 keep 不再出刀** 见 [SLASH-INTENT.md](./SLASH-INTENT.md) 消费层。 |
 | 刀面三点不会退化 | Three.js `setFromCoplanarPoints` 共线时 **normal→0，不抛错**（源码注释：*should an error be thrown if normal is zero?*）。微段两端世界点几乎重合时刀面坏掉。 |
 
 `clipPolylineToHull` / `clipChordToHull` 已是凸包线段裁剪（Cyrus–Beck 一类：t∈[0,1] 求进入/离开）。连续切应复用 **折线在该 mesh 上的累计弦**，不要丢去只用 5px 段去比 `throughThreshold(box)`。
