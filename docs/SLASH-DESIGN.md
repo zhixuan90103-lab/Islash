@@ -3,6 +3,7 @@
 参数真源：`src/game/design.ts`。手感只改那里（或调试面板，写的是同一份对象）。不要在其它模块再写魔法数。
 
 调研：[SLASH-RESEARCH.md](./SLASH-RESEARCH.md)（玩法参考）、[SLASH-TECH.md](./SLASH-TECH.md)（连续切输入）。  
+意图：[SLASH-INTENT.md](./SLASH-INTENT.md)（入点 / 补切 / 刀光 / 夹缝）。  
 本文是**当前工程已落地的规则**。调研里的「Box 三角剖分 / 不做物理」已被覆盖。
 
 ## 一句话
@@ -11,15 +12,16 @@
 
 ## 规则
 
-1. **一刀成立**：滑出多边形时，进出落在**两条不同的轮廓边上**就切（真实凸包边，不是包围盒）。同一条边蹭进蹭出不算。
-2. **下一刀**：切完必须先回到空白（刀尖不在任何剩余木上），再从空白进入并贯穿。同一滑动可以多刀，但不能贴在板上连切。
-3. **命中**：微段与轮廓求交；刀线用该刀的入点→出点。抬手停在板内不切；`pointercancel` 收刀，已切的保留。
-4. **切开**：用刀线切开 **2D 轮廓**（`userData.profile`），每块按同一配方重新挤出。删旧 mesh，加两块。面积×厚度大的留下（static），小的变 dynamic。
-5. **刀向**：入点→出点（设计坐标投到板面 XY）。冲量用法线 `Cross(刀向, 相机朝向)`，退化时 `camera.up`。
-6. **只踢被砍下的块**。留下的块不位移、不给冲量、不做体积质心平移。
-7. **飞出块**绕体积质心。质量/惯量 = Rapier 密度 × 碰撞体。无地面。
-8. **不伪造**「重的一侧向下」的额外力矩。
-9. **触控**走 `clientToDesign`；letterbox 外忽略。调试面板 `stopPropagation`，不抢刀。
+1. **一刀成立**：进出落在**两条不同凸包边上**，且切缝够深（`minChord` / `hullChordRatio`；邻边还要 `cornerMinChord`）。同一条边蹭、尖角擦边不算。快划可在沿青线 85% 且对准时**补出点**（帮助，见意图文）；慢划必须真出边。
+2. **下一刀**：切完须回到空白再贯穿。同一按住可以多刀。**仅当新刀与上一刀几乎同向且贴缝**才视为同一条 A→B、不再切；**方向一变就当新刀、必须切**。不是不抬手只能一刀。补切还要 `assistLeave`。
+3. **命中**：微段与轮廓求交；刀线用该刀的入点→出点。**必须从板外进**（或按下已贴边的入点辅助）。板心按下再拖出不记刀。抬手停在板内不切；`pointercancel` 收刀，已切的保留。
+4. **反馈**：夹缝（入边→刀尖）在下，刀光在中，手指划痕在上。刀光不等于提交。细则见意图文。
+5. **切开**：用刀线切开 **2D 轮廓**（`userData.profile`），每块按同一配方重新挤出。删旧 mesh，加两块。面积×厚度大的留下（static），小的变 dynamic。
+6. **刀向**：入点→出点（设计坐标投到板面 XY）。冲量用法线 `Cross(刀向, 相机朝向)`，退化时 `camera.up`。
+7. **只踢被砍下的块**。留下的块不位移、不给冲量、不做体积质心平移。
+8. **飞出块**绕体积质心。质量/惯量 = Rapier 密度 × 碰撞体。无地面。
+9. **不伪造**「重的一侧向下」的额外力矩。
+10. **触控**走 `clientToDesign`；letterbox 外忽略。调试面板 `stopPropagation`，不抢刀。
 
 ## 几何（对齐 iSlash 切边）
 
@@ -80,7 +82,7 @@
 
 - `WOOD_SHAPE`：设计形体 **0.7 × 2 × 0.075**（板，不是正方体）。
 - `WOOD_SHAPE.frontInset`：正面倒角宽度，默认 **0.028**（XY 与 Z 相同）。锐角靠半平面裁掉内顶点，不另设 miter 上限。
-- `WOOD.width/height/depth`：乘数，默认全 **1**。
+- `WOOD.width/height/depth`：乘数，当前默认 **1.5 / 1.5 / 1**（实际约 **1.05 × 3.0 × 0.075**）。
 - `WOOD.lift`：相对画面中心的 Y。
 - 实际边长：`woodSize()` = SHAPE × 乘数。改乘数后调试面板会重建板。
 
@@ -140,9 +142,9 @@ J = mass * targetSpeed
 | maxUpFraction | 0.7 | 冲量向上分量上限 |
 | camYScale | 0.25 | 朝屏幕向量的 Y 缩放 |
 
-`SLASH`：`armDist` 8、`interpGap` 5、`minChord` 8、`hullChordRatio` 0.08。
+`SLASH`：`armDist` 8、`interpGap` 5、`minChord` 8、`hullChordRatio` 0.08。提交时弦长必须够深。
 
-`TRAIL`：`life` 0.24、`minDist` 0.5、`headW` 5、`tailW` 0。
+入点 / 补切 / 刀光 / 夹缝 / 划痕参数见 [SLASH-INTENT.md](./SLASH-INTENT.md) 参数表（`START` `INTENT` `FLASH` `TRAIL`）。
 
 ## 模块
 
@@ -160,7 +162,7 @@ J = mass * targetSpeed
 | `woodChamfer.ts` | 半平面内收计划 + 封闭挤出网格 |
 | `wood.ts` | 生成/重置、meshFromProfile |
 | `slashWorld.ts` | 会话编排 |
-| `slashDebug.ts` | 刀痕 |
+| `slashDebug.ts` | 夹缝、刀光、划痕 overlay |
 | `slashDebugPanel.ts` | `#ui-root` 调参 |
 | `index.ts` | `mountSlashWorld` |
 

@@ -101,7 +101,7 @@ pointerup    → 刃消失，trail 淡出
 
 ### 和本仓库的差距
 
-当前实现（`slashWorld.tryCut` + `cutTarget.resolveCutTarget`）：
+当前实现（`slashIntent.stepSlashIntent` + `slashWorld` 切网格）：
 
 | 现状 | 后果 |
 |------|------|

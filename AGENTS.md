@@ -71,7 +71,7 @@ npm run ios           # build + sync + 开 Xcode
 
 ## 业务怎么加
 
-- 玩法：`src/game/`；规则与参数表：[docs/SLASH-DESIGN.md](docs/SLASH-DESIGN.md)  
+- 玩法：`src/game/`；规则：[docs/SLASH-DESIGN.md](docs/SLASH-DESIGN.md)；意图：[docs/SLASH-INTENT.md](docs/SLASH-INTENT.md)  
 - 保留：adapt / create-renderer / haptics / plugins / `base`  
 - 触控：`clientToDesign` + 忽略 letterbox 外  
 - UI：只挂 `#ui-root`（调试面板已在此）  

@@ -142,6 +142,42 @@ function adjacentEdges(enter: number, exit: number, n: number): boolean {
   return d === 1 || d === n - 1;
 }
 
+function distToLine(
+  p: DesignPoint,
+  a: DesignPoint,
+  b: DesignPoint,
+): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = hypot(dx, dy) || 1;
+  return Math.abs((p.x - a.x) * dy - (p.y - a.y) * dx) / len;
+}
+
+function sameTrend(
+  prev: { c0: DesignPoint; c1: DesignPoint },
+  next: { c0: DesignPoint; c1: DesignPoint },
+): boolean {
+  const ax = prev.c1.x - prev.c0.x;
+  const ay = prev.c1.y - prev.c0.y;
+  const bx = next.c1.x - next.c0.x;
+  const by = next.c1.y - next.c0.y;
+  const ang = headingAngleDeg(ax, ay, bx, by);
+  if (ang > START.trendAngle) return false;
+  const d = Math.min(
+    distToLine(next.c0, prev.c0, prev.c1),
+    distToLine(next.c1, prev.c0, prev.c1),
+  );
+  return d <= START.trendDist;
+}
+
+function takeCommit(
+  stroke: SlashStroke,
+  target: CutTarget,
+): CutTarget | null {
+  if (stroke.lastSlash && sameTrend(stroke.lastSlash, target)) return null;
+  return target;
+}
+
 function slashDeepEnough(
   c0: DesignPoint,
   c1: DesignPoint,
@@ -315,13 +351,15 @@ export function resolveCutBySegment(
       ) {
         return null;
       }
-      stroke.progress.delete(trackedId);
-      return {
+      const assisted = takeCommit(stroke, {
         mesh,
         c0: st.c0,
         c1: exit,
         chord: Math.max(st.chord, full),
-      };
+      });
+      if (!assisted) return null;
+      stroke.progress.delete(trackedId);
+      return assisted;
     }
 
     const exitEdge = clipped
@@ -341,7 +379,12 @@ export function resolveCutBySegment(
     ) {
       return null;
     }
-    return { mesh, c0: st.c0, c1: st.c1, chord: st.chord };
+    return takeCommit(stroke, {
+      mesh,
+      c0: st.c0,
+      c1: st.c1,
+      chord: st.chord,
+    });
   }
 
   for (const mesh of live) {
@@ -421,7 +464,7 @@ export function resolveCutBySegment(
       if (
         slashDeepEnough(c0, c1, enterEdge, exitEdge, proj.hull, proj.box)
       ) {
-        return { mesh, c0, c1, chord };
+        return takeCommit(stroke, { mesh, c0, c1, chord });
       }
       continue;
     }

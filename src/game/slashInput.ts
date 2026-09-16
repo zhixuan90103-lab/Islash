@@ -52,6 +52,8 @@ export type SlashStroke = {
   /** 切完后必须先回到空白，再贯穿才算下一刀。 */
   awaitBlank: boolean;
   intent: SlashIntent;
+  /** 本划上一刀的 A→B。同趋势贴缝不再切。 */
+  lastSlash: { c0: DesignPoint; c1: DesignPoint } | null;
   startedAt: number;
   lastAt: number;
 };
@@ -155,6 +157,7 @@ export function createSlashInput(
       slicedIds: new Set(),
       progress: new Map(),
       awaitBlank: false,
+      lastSlash: null,
       intent: emptyIntent(),
       startedAt: now,
       lastAt: now,

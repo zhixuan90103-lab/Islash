@@ -115,6 +115,7 @@ export async function mountSlashWorld(
       speedPx,
     );
     lastCommit = { c0: commit.c0, c1: commit.c1 };
+    stroke.lastSlash = lastCommit;
     const crack2 =
       crackAlongStroke(
         wood.cuttables,
