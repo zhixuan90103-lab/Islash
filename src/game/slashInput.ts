@@ -21,10 +21,21 @@ export type SlashIntent = {
   stable: number;
   c0: DesignPoint | null;
   c1: DesignPoint | null;
+  earlyFlashed: boolean;
+  flashHot: boolean;
+  aimStable: number;
 };
 
 export function emptyIntent(): SlashIntent {
-  return { locked: false, stable: 0, c0: null, c1: null };
+  return {
+    locked: false,
+    stable: 0,
+    c0: null,
+    c1: null,
+    earlyFlashed: false,
+    flashHot: false,
+    aimStable: 0,
+  };
 }
 
 export type SlashStroke = {

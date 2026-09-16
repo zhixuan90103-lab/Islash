@@ -152,7 +152,7 @@ J = mass * targetSpeed
 | `backdrop.ts` | 水色径向背景贴 `scene.background` |
 | `slashInput.ts` | 指针折线、出刃、滑速 |
 | `slashHit.ts` | 轮廓、射线、点在凸包 |
-| `cutTarget.ts` | 这一刀砍谁、哪一段弦、何时落刀 |
+| `slashIntent.ts` | 意图状态机：入点、何时落刀、夹缝/青线、提前刀光 |
 | `slashCut.ts` | 板面 XY 上切轮廓，重建两块网格 |
 | `bladeForce.ts` | 冲量合成、质量归一、夹速度；体积用轮廓面积 |
 | `slashPhysics.ts` | Rapier；仅飞出块做体积质心；留下块 fixed |

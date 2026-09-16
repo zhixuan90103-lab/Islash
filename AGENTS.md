@@ -27,6 +27,7 @@
 | iOS 注入 | `scripts/bootstrap-ios.mjs` |
 | 音效方案（未实现） | `docs/AUDIO.md` |
 | 划切规范 | `docs/SLASH-DESIGN.md`（参数 `src/game/design.ts`） |
+| 意图识别 | `docs/SLASH-INTENT.md`（状态机 `src/game/slashIntent.ts`） |
 | 水色背景 | `src/game/backdrop.ts` |
 | 划切调研 | `docs/SLASH-RESEARCH.md` |
 | 连续切技术 | `docs/SLASH-TECH.md` |

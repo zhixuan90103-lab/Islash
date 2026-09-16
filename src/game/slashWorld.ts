@@ -1,10 +1,9 @@
 import * as THREE from 'three';
 import { applyBladeImpulse, pieceVolume } from './bladeForce';
-import { crackAlongStroke, previewCutChord, resolveCutBySegment } from './cutTarget';
 import {
-  headingAngleDeg,
+  crackAlongStroke,
   resetSlashIntent,
-  updateSlashIntent,
+  stepSlashIntent,
 } from './slashIntent';
 import { mountSlashDebugPanel } from './slashDebugPanel';
 import { createSlashOverlay } from './slashDebug';
@@ -16,7 +15,6 @@ import {
   type SlashStroke,
 } from './slashInput';
 import { createSlashPhysics } from './slashPhysics';
-import { FLASH } from './design';
 import { createWoodSet } from './wood';
 import type { StageLayout } from '../adapt/design';
 
@@ -40,22 +38,7 @@ export async function mountSlashWorld(
   const overlay = createSlashOverlay(stage);
   const wood = createWoodSet(scene, physics);
   wood.spawn();
-  let lastGeom: { c0: DesignPoint; c1: DesignPoint } | null = null;
-  let lastLocked: { c0: DesignPoint; c1: DesignPoint } | null = null;
   let lastCommit: { c0: DesignPoint; c1: DesignPoint } | null = null;
-  let flashHot = false;
-  let earlyFlashed = false;
-  let aimStable = 0;
-
-  const pushIntentDebug = (stroke: SlashStroke) => {
-    overlay.setIntentDebug({
-      geom: lastGeom,
-      locked: lastLocked,
-      commit: lastCommit,
-      stable: stroke.intent.stable,
-      lockedFlag: stroke.intent.locked,
-    });
-  };
 
   const replaceCut = (
     old: THREE.Mesh,
@@ -96,29 +79,25 @@ export async function mountSlashWorld(
     return { keep, drop };
   };
 
-  const tryCutSeg = (
+  const applyCommit = (
     stroke: SlashStroke,
     seg: [DesignPoint, DesignPoint],
     dtSec: number,
-  ) => {
-    const born = new Set<number>();
-    const snapshot = wood.cuttables.slice();
-    const best = resolveCutBySegment(
-      snapshot,
-      camera,
-      stroke,
-      seg,
-      born,
-      dtSec,
-    );
-    if (!best) return false;
+    commit: {
+      mesh: THREE.Mesh;
+      c0: DesignPoint;
+      c1: DesignPoint;
+    },
+    commitFlash: boolean,
+    crack: { c0: DesignPoint; c1: DesignPoint } | null,
+  ): boolean => {
     camera.updateMatrixWorld(true);
-    const result = cutMeshBySlash(best.mesh, camera, best.c0, best.c1);
+    const result = cutMeshBySlash(commit.mesh, camera, commit.c0, commit.c1);
     if (!result) {
       report('碰到了但切开失败');
       return false;
     }
-    stroke.slicedIds.add(best.mesh.id);
+    stroke.slicedIds.add(commit.mesh.id);
     stroke.progress.clear();
     resetSlashIntent(stroke);
     stroke.awaitBlank = true;
@@ -126,23 +105,27 @@ export async function mountSlashWorld(
       segmentSpeedPxPerSec(seg[0], seg[1], dtSec),
       80,
     );
-    const { keep, drop } = replaceCut(
-      best.mesh,
+    replaceCut(
+      commit.mesh,
       result.a,
       result.b,
       result.bladeDir,
       result.hitPoint,
       speedPx,
     );
-    born.add(keep.id);
-    born.add(drop.id);
-    lastCommit = { c0: best.c0, c1: best.c1 };
+    lastCommit = { c0: commit.c0, c1: commit.c1 };
+    const crack2 =
+      crackAlongStroke(
+        wood.cuttables,
+        camera,
+        stroke,
+        seg[1],
+        seg[0],
+      ) ?? crack;
+    if (crack2) overlay.setCrack(crack2.c0, crack2.c1);
+    else overlay.setCrack(null);
     overlay.freezeFlash();
-    if (!earlyFlashed) overlay.flash(best.c0, best.c1, false);
-    earlyFlashed = false;
-    flashHot = false;
-    aimStable = 0;
-    pushIntentDebug(stroke);
+    if (commitFlash) overlay.flash(commit.c0, commit.c1, false);
     report('已切开');
     return true;
   };
@@ -159,12 +142,7 @@ export async function mountSlashWorld(
     onStroke: (stroke) => {
       const tip = stroke.points[stroke.points.length - 1];
       if (stroke.points.length === 1) {
-        lastGeom = null;
-        lastLocked = null;
         lastCommit = null;
-        flashHot = false;
-        earlyFlashed = false;
-        aimStable = 0;
         overlay.begin();
       }
       if (tip) overlay.push(tip);
@@ -174,61 +152,40 @@ export async function mountSlashWorld(
     },
     onMove: (stroke, lastSeg, dtSec) => {
       overlay.push(lastSeg[1]);
-      const cut = tryCutSeg(stroke, lastSeg, dtSec);
-      const crack = crackAlongStroke(
-        wood.cuttables,
+      const frame = stepSlashIntent(
+        wood.cuttables.slice(),
         camera,
         stroke,
-        lastSeg[1],
-        lastSeg[0],
+        lastSeg,
+        new Set(),
+        dtSec,
       );
-      if (crack) overlay.setCrack(crack.c0, crack.c1);
+      if (frame.crack) overlay.setCrack(frame.crack.c0, frame.crack.c1);
       else overlay.setCrack(null);
-      if (!cut) {
-        const geom = previewCutChord(
-          wood.cuttables,
-          camera,
+      if (frame.commit) {
+        applyCommit(
           stroke,
-          lastSeg[1],
+          lastSeg,
+          dtSec,
+          frame.commit,
+          frame.commitFlash,
+          frame.crack,
         );
-        const locked = updateSlashIntent(stroke, geom, lastSeg, dtSec);
-        lastGeom = geom;
-        lastLocked = locked;
-        const speed = segmentSpeedPxPerSec(lastSeg[0], lastSeg[1], dtSec);
-        if (locked) {
-          const ang = headingAngleDeg(
-            lastSeg[1].x - lastSeg[0].x,
-            lastSeg[1].y - lastSeg[0].y,
-            locked.c1.x - locked.c0.x,
-            locked.c1.y - locked.c0.y,
-          );
-          if (ang <= FLASH.aimAngle) aimStable += 1;
-          else aimStable = 0;
-          const cyan = geom ?? locked;
-          const ax = cyan.c1.x - cyan.c0.x;
-          const ay = cyan.c1.y - cyan.c0.y;
-          const full = Math.hypot(ax, ay) || 1;
-          const traveled =
-            ((lastSeg[1].x - cyan.c0.x) * ax + (lastSeg[1].y - cyan.c0.y) * ay) /
-            full;
-          const nearExit = traveled / full >= FLASH.minTravelRatio;
-          const aimed =
-            aimStable >= FLASH.aimSegs &&
-            speed >= FLASH.minSpeed &&
-            nearExit;
-          if (aimed) flashHot = true;
-        } else {
-          flashHot = false;
-          aimStable = 0;
-        }
-        if (locked && flashHot && !earlyFlashed) {
-          earlyFlashed = true;
-          const chord = crack ?? locked;
-          overlay.flash(chord.c0, chord.c1, true);
-        }
-        overlay.setPreview(null);
-        pushIntentDebug(stroke);
+      } else if (frame.earlyFlash) {
+        const chord = frame.crack ?? frame.cyan;
+        if (chord) overlay.flash(chord.c0, chord.c1, true);
       }
+      overlay.setPreview(null);
+      overlay.setIntentDebug({
+        geom: frame.cyan,
+        locked:
+          frame.locked && stroke.intent.c0 && stroke.intent.c1
+            ? { c0: stroke.intent.c0, c1: stroke.intent.c1 }
+            : null,
+        commit: lastCommit,
+        stable: stroke.intent.stable,
+        lockedFlag: frame.locked,
+      });
     },
     onEnd: (stroke) => {
       if (stroke && stroke.slicedIds.size === 0) {
