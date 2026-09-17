@@ -168,7 +168,7 @@ J = mass * targetSpeed
 | maxUpFraction | 0.7 | 冲量向上分量上限 |
 | camYScale | 0.25 | 朝屏幕向量的 Y 缩放 |
 
-`SLASH`：`armDist` 8、`interpGap` 5、`minChord` 8、`hullChordRatio` 0.08。提交时弦长必须够深。
+`SLASH`：`armDist` 8、`interpGap` 5、`minChord` 4、`hullChordRatio` 0.04。提交时弦长必须够深。
 
 入点 / 补切 / 已消费直线 / 刀光 / 夹缝 / 划痕参数见 [SLASH-INTENT.md](./SLASH-INTENT.md)（`START` `INTENT` `FLASH` `TRAIL`）。
 

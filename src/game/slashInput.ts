@@ -60,6 +60,16 @@ export type SlashStroke = {
   intent: SlashIntent;
   /** 抬手前已消费的刀线。走廊内余势不再开新刀。 */
   consumed: ConsumedLine[];
+  /**
+   * 本刀入点，只写一次。progress 被清掉也要沿用，禁止按新朝向重锁。
+   * 切开成功 / 抬手才清空。
+   */
+  enterLock: {
+    c0: DesignPoint;
+    enterEdge: number;
+    dirx: number;
+    diry: number;
+  } | null;
   startedAt: number;
   lastAt: number;
 };
@@ -165,6 +175,7 @@ export function createSlashInput(
       slicedIds: new Set(),
       progress: new Map(),
       consumed: [],
+      enterLock: null,
       intent: emptyIntent(),
       startedAt: now,
       lastAt: now,

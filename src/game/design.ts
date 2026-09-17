@@ -156,8 +156,8 @@ export function lightKeyPos(): { x: number; y: number; z: number } {
 export const SLASH = {
   armDist: 8,
   interpGap: 5,
-  minChord: 8,
-  hullChordRatio: 0.08,
+  minChord: 4,
+  hullChordRatio: 0.04,
 };
 
 /**
@@ -175,6 +175,11 @@ export const START = {
   endTravelFast: 0.8,
   /** 起点打分低于此不帮。 */
   scoreMin: 0.35,
+  /**
+   * 入点锁定前，刀尖离候选 A 至少这么远（px）。
+   * 低于触控 slop 的第一段方向噪声会锁错边。
+   */
+  lockSlop: 14,
   /** 帮助用最近这么多微段的中位速度。 */
   speedWindow: 4,
   /**
