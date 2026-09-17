@@ -17,6 +17,7 @@
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
 		84A1375C3B1524A100AB0001 /* AdvancedHapticsPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84A1375B3B1524A100AB0001 /* AdvancedHapticsPlugin.swift */; };
 		84A1375E3B1524A100AB0002 /* BridgeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84A1375D3B1524A100AB0002 /* BridgeViewController.swift */; };
+		84A137603B1524A100AB0003 /* NativeAudioPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84A1375F3B1524A100AB0003 /* NativeAudioPlugin.swift */; };
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
 /* End PBXBuildFile section */
 
@@ -32,6 +33,7 @@
 		50B271D01FEDC1A000F3C39B /* public */ = {isa = PBXFileReference; lastKnownFileType = folder; path = public; sourceTree = "<group>"; };
 		84A1375B3B1524A100AB0001 /* AdvancedHapticsPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvancedHapticsPlugin.swift; sourceTree = "<group>"; };
 		84A1375D3B1524A100AB0002 /* BridgeViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BridgeViewController.swift; sourceTree = "<group>"; };
+		84A1375F3B1524A100AB0003 /* NativeAudioPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAudioPlugin.swift; sourceTree = "<group>"; };
 		9582B6822FE993A50072D4E8 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
@@ -73,6 +75,7 @@
 				504EC3071FED79650016851F /* AppDelegate.swift */,
 				84A1375D3B1524A100AB0002 /* BridgeViewController.swift */,
 				84A1375B3B1524A100AB0001 /* AdvancedHapticsPlugin.swift */,
+				84A1375F3B1524A100AB0003 /* NativeAudioPlugin.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
 				504EC3101FED79650016851F /* LaunchScreen.storyboard */,
@@ -166,6 +169,7 @@
 			files = (
 				84A1375C3B1524A100AB0001 /* AdvancedHapticsPlugin.swift in Sources */,
 				84A1375E3B1524A100AB0002 /* BridgeViewController.swift in Sources */,
+				84A137603B1524A100AB0003 /* NativeAudioPlugin.swift in Sources */,
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
 			);

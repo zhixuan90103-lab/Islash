@@ -23,6 +23,7 @@ import {
 import { createSlashPhysics } from './slashPhysics';
 import { createWoodSet } from './wood';
 import { createSlashHaptics } from './slashHaptics';
+import { gameAudio } from '../audio/gameAudio';
 import type { StageLayout } from '../adapt/design';
 
 export type SlashSession = {
@@ -44,6 +45,7 @@ export async function mountSlashWorld(
   getLayout: () => StageLayout | null,
 ): Promise<SlashSession> {
   const physics = await createSlashPhysics();
+  void gameAudio.preload();
   const overlay = createSlashOverlay(stage);
   const shake = createScreenShake(camera);
   const bladeHaptics = createSlashHaptics();
@@ -262,6 +264,9 @@ export async function mountSlashWorld(
     if (!finish && commitFlash) overlay.flash(commit.c0, commit.c1, false);
     hud.set(boardCutProgress(originVol, keepVol, finish));
     bladeHaptics.onCut(speedPx, finish);
+    const sizeK = Math.min(1, (2 * dropVol) / Math.max(1e-12, dropVol + keepVol));
+    gameAudio.crack({ speedPx, sizeK, finish });
+    gameAudio.resetSlide();
     report(finish ? '完成切割' : '已切开');
     return true;
   };
@@ -286,12 +291,14 @@ export async function mountSlashWorld(
 
   const input = createSlashInput(stage, getLayout, {
     onStroke: (stroke) => {
-      const tip = stroke.points[stroke.points.length - 1];
       if (stroke.points.length === 1) {
         lastCommit = null;
         overlay.begin();
+        gameAudio.unlock();
       }
-      if (tip) overlay.push(tip);
+    },
+    onTip: (p) => {
+      overlay.push(p);
     },
     onPredicted: (points) => {
       overlay.setPredicted(points);
@@ -307,6 +314,14 @@ export async function mountSlashWorld(
       );
       if (frame.crack) overlay.setCrack(frame.crack.c0, frame.crack.c1);
       else overlay.setCrack(null);
+      const onBoard =
+        !!frame.enter &&
+        (frame.phase === 'track' || frame.phase === 'aimed' || !!frame.commit);
+      if (onBoard) {
+        gameAudio.slideOnBoard(
+          segmentSpeedPxPerSec(lastSeg[0], lastSeg[1], dtSec),
+        );
+      }
       if (frame.commit) {
         const ok = applyCommit(
           stroke,
@@ -337,6 +352,7 @@ export async function mountSlashWorld(
       });
     },
     onEnd: (stroke) => {
+      gameAudio.resetSlide();
       bladeHaptics.cancel();
       if (stroke && stroke.slicedIds.size === 0) {
         report('划过但未贯穿木板');
@@ -392,6 +408,7 @@ export async function mountSlashWorld(
     applyView: () => shake.applyView(),
     restoreView: () => shake.restoreView(),
     dispose: () => {
+      gameAudio.dispose();
       bladeHaptics.cancel();
       input.dispose();
       panel.dispose();

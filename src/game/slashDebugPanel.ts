@@ -22,6 +22,8 @@ import {
   LIGHT_DEFAULT,
   HAPTIC,
   HAPTIC_DEFAULT,
+  SFX,
+  SFX_DEFAULT,
   woodSize,
 } from './design';
 
@@ -50,10 +52,8 @@ const PHYS_SLIDERS: SliderSpec[] = [
 ];
 
 const TRAIL_SLIDERS: SliderSpec[] = [
-  { key: 'maxLen', label: '拖尾最长', min: 24, max: 220, step: 2 },
-  { key: 'life', label: '收回时长', min: 0.06, max: 0.6, step: 0.02 },
-  { key: 'still', label: '停手延迟', min: 0, max: 0.25, step: 0.01 },
-  { key: 'stopSpeed', label: '停手速度', min: 4, max: 160, step: 2 },
+  { key: 'maxLen', label: '快划上限', min: 24, max: 220, step: 2 },
+  { key: 'life', label: '点寿命', min: 0.06, max: 0.6, step: 0.02 },
   { key: 'minDist', label: '拖尾间距', min: 0.5, max: 16, step: 0.5 },
   { key: 'smooth', label: '低通秒', min: 0, max: 0.08, step: 0.002 },
   { key: 'subdiv', label: '曲线细分', min: 1, max: 12, step: 1 },
@@ -89,6 +89,18 @@ const FINALE_SLIDERS: SliderSpec[] = [
   { key: 'bladeScale', label: '终刀光倍', min: 1, max: 4, step: 0.1 },
   { key: 'bladeSpan', label: '终刀光长', min: 160, max: 700, step: 10 },
   { key: 'flashPeak', label: '终闪白', min: 0.02, max: 0.5, step: 0.01 },
+];
+
+const SFX_SLIDERS: SliderSpec[] = [
+  { key: 'speedRef', label: '满速尺子', min: 80, max: 600, step: 10 },
+  { key: 'slideMaxDur', label: '慢滑最长秒', min: 0.3, max: 1, step: 0.02 },
+  { key: 'slideMinDur', label: '快滑最短秒', min: 0.12, max: 0.6, step: 0.02 },
+  { key: 'volSlow', label: '慢滑音量', min: 0, max: 0.6, step: 0.01 },
+  { key: 'volFast', label: '快滑音量', min: 0, max: 1, step: 0.01 },
+  { key: 'crackVol', label: '裂木音量', min: 0, max: 1, step: 0.01 },
+  { key: 'crackRateSmall', label: '小块音调', min: 0.8, max: 1.6, step: 0.02 },
+  { key: 'crackRateBig', label: '大块音调', min: 0.5, max: 1.2, step: 0.02 },
+  { key: 'finishCrackMul', label: '终刀裂倍', min: 1, max: 1.6, step: 0.02 },
 ];
 
 const HAPTIC_SLIDERS: SliderSpec[] = [
@@ -186,6 +198,8 @@ export function mountSlashDebugPanel(
       <div class="debug-shake"></div>
       <p class="debug-sec">震动（马达）</p>
       <div class="debug-haptic"></div>
+      <p class="debug-sec">音效</p>
+      <div class="debug-sfx"></div>
       <p class="debug-sec">刀光</p>
       <div class="debug-flash"></div>
       <div class="debug-actions">
@@ -198,6 +212,7 @@ export function mountSlashDebugPanel(
         <button type="button" data-act="fx">重置特效</button>
         <button type="button" data-act="shake">重置震屏</button>
         <button type="button" data-act="haptic">重置震动</button>
+        <button type="button" data-act="sfx">重置音效</button>
         <button type="button" data-act="flash">重置刀光</button>
       </div>
     </div>
@@ -215,6 +230,7 @@ export function mountSlashDebugPanel(
   const fxList = wrap.querySelector('.debug-fx') as HTMLElement;
   const shakeList = wrap.querySelector('.debug-shake') as HTMLElement;
   const hapticList = wrap.querySelector('.debug-haptic') as HTMLElement;
+  const sfxList = wrap.querySelector('.debug-sfx') as HTMLElement;
   const flashList = wrap.querySelector('.debug-flash') as HTMLElement;
   const toggle = wrap.querySelector('.debug-toggle') as HTMLButtonElement;
 
@@ -435,6 +451,27 @@ export function mountSlashDebugPanel(
     hapticInputs.push({ spec, input, val });
   }
 
+  const sfxInputs: { spec: SliderSpec; input: HTMLInputElement; val: HTMLSpanElement }[] =
+    [];
+
+  for (const spec of SFX_SLIDERS) {
+    const row = document.createElement('label');
+    row.className = 'debug-row';
+    const cur = SFX[spec.key as keyof typeof SFX];
+    row.innerHTML = `<span>${spec.label}</span><input type="range" min="${spec.min}" max="${spec.max}" step="${spec.step}" /><span class="debug-val"></span>`;
+    const input = row.querySelector('input')!;
+    const val = row.querySelector('.debug-val') as HTMLSpanElement;
+    input.value = String(cur);
+    val.textContent = Number(cur).toFixed(spec.step < 1 ? 2 : 0);
+    input.addEventListener('input', () => {
+      const n = Number(input.value);
+      (SFX as Record<string, number>)[spec.key] = n;
+      val.textContent = n.toFixed(spec.step < 1 ? 2 : 0);
+    });
+    sfxList.appendChild(row);
+    sfxInputs.push({ spec, input, val });
+  }
+
   const flashInputs: { spec: SliderSpec; input: HTMLInputElement; val: HTMLSpanElement }[] =
     [];
 
@@ -501,6 +538,11 @@ export function mountSlashDebugPanel(
       input.value = String(n);
       val.textContent = n.toFixed(spec.step < 1 ? 2 : 0);
     }
+    for (const { spec, input, val } of sfxInputs) {
+      const n = SFX[spec.key as keyof typeof SFX];
+      input.value = String(n);
+      val.textContent = n.toFixed(spec.step < 1 ? 2 : 0);
+    }
     for (const { spec, input, val } of flashInputs) {
       const n = FLASH[spec.key as keyof typeof FLASH];
       input.value = String(n);
@@ -555,6 +597,11 @@ export function mountSlashDebugPanel(
   wrap.querySelector('[data-act="haptic"]')!.addEventListener('click', (e) => {
     e.stopPropagation();
     Object.assign(HAPTIC, HAPTIC_DEFAULT);
+    sync();
+  });
+  wrap.querySelector('[data-act="sfx"]')!.addEventListener('click', (e) => {
+    e.stopPropagation();
+    Object.assign(SFX, SFX_DEFAULT);
     sync();
   });
   wrap.querySelector('[data-act="flash"]')!.addEventListener('click', (e) => {

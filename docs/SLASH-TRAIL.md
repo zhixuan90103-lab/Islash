@@ -1,6 +1,6 @@
 # 常规刀痕拖尾怎么做
 
-调研结论。本仓现状：沿路径最长 `TRAIL.maxLen`（默认 **180px**）；停手后再等 `still`（0.03s）从尾收到指尖，宽度一并收窄。刀尖宽、尾细、三角尖。真实触点 + 向心 Catmull-Rom。参数真源 `design.ts`，打击感总则 [SLASH-FEEL.md](./SLASH-FEEL.md)。
+调研结论。本仓现状：**时间制**。可见段 = 最近 `TRAIL.life`（默认 0.28s）的触点路径，再钳 `maxLen` 180px。快划长、慢划短但始终能看见。刀尖宽、尾细、三角尖。触点来自 `onTip`（与切开折线分离）。实现 `src/game/slashTrail.ts`。参数真源 `design.ts`，打击感总则 [SLASH-FEEL.md](./SLASH-FEEL.md)。
 
 拖尾是**表现**，和「一刀贯穿」判定无关。
 
@@ -21,7 +21,7 @@ Unity `TrailRenderer`（Fruit Ninja 教程、Zigurous 都用这个）：
 
 要点（业界时间制）：**长度由时间决定，不是固定像素。** 划得快，0.2s 内走出的路径长，拖尾就长；停住，旧点过期，尾巴自己收掉。
 
-本仓改成 **最长像素 + 停手收回**：快划也不超过 `maxLen`；停在某处时尾巴沿路径收到指尖。
+本仓：寿命窗口 + `maxLen` 上限。快划被钳在 180px；慢划长度 ≈ 速度 × life，不会被收成「必须划满才看见」。
 
 ## 2. 三种常见画法
 
@@ -59,7 +59,7 @@ https://www.flutterclutter.dev/flutter/tutorials/flutter-game-tutorial-fruit-nin
 | 抬手 | 不再加点；残影按寿命淡出（可留一帧），不是瞬间消失 |
 | 按下 | `Clear()`，避免接上一刀的尾巴 |
 | 采样 | 最小间距；快划插值（判定折线已有 coalesced + INTERP_GAP） |
-| 去抖 | 轻 EMA 只滤微抖；绘制用向心 Catmull-Rom 穿过**真实触点**。判定用的 `INTERP_GAP` 直线补点不要进拖尾，否则快划会变成两点之间一根弦。 |
+| 去抖 | 轻 EMA 只滤小于 `minDist` 的微抖；真位移贴手指。快划按 `minDist` 沿触点段补点，不把整条丝带收成两点弦。 |
 | 转弯 | 用法线挤带；点太密 + 急转会翻面，要限制最小距离 |
 
 刀痕常加：加色混合、短 glow、头一个小圆点。判定碰撞用刃/段，**不用拖尾 mesh**。
@@ -68,9 +68,9 @@ https://www.flutterclutter.dev/flutter/tutorials/flutter-game-tutorial-fruit-nin
 
 | | 本仓现在 | 常规 Trail（纯时间） |
 |--|----------|----------------------|
-| 截断 | **路径最长 `maxLen`** | 点寿命 0.1–0.3s（快划更长） |
-| 停住 | 尾巴沿路径收到指尖 | 旧点过期，尾巴收 |
-| 抬手 | `end()` 停采样，同样收回 | 残影按寿命淡出 |
+| 截断 | 点寿命 `life`，再钳 `maxLen` | 点寿命 0.1–0.3s（快划更长） |
+| 停住 | 旧点过期，尾巴收 | 旧点过期，尾巴收 |
+| 抬手 | `end()` 停采样，残点按寿命掉 | 残影按寿命淡出 |
 | 几何 | canvas 填左右轮廓 | 同款丝带，或 GPU Trail |
 | 贴图 | 纯白填充 | 常用 head-body-tail 条带图 |
 

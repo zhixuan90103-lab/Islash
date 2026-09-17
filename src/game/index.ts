@@ -16,5 +16,6 @@ export {
   LIGHT,
   BOARDS,
   HAPTIC,
+  SFX,
   boardCutProgress,
 } from './design';

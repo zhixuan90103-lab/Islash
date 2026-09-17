@@ -101,7 +101,7 @@
 
 ### 划痕（`TRAIL`）
 
-手指折线，**最长 `maxLen` 180px**，不是「滑多快就多长」。只记真实触点，绘制向心 Catmull-Rom。停手（< `stopSpeed`，再等 `still`）或抬手：尾巴沿路径收到指尖，满长约 `life` 秒，宽度一并收窄。刀尖三角 `tipLen`。`predictAlpha` 0。参数见下表；调研 [SLASH-TRAIL.md](./SLASH-TRAIL.md)。
+时间制丝带：可见段 = 最近 `life` 秒的触点路径，再钳 `maxLen`。快划长、慢划短但始终能看见。触点走 `onTip`，不进切开判定。绘制：弧长重采样 + 圆内点 + 向心 Catmull-Rom。停住/抬手：旧点过期，尾巴自己收。刀尖三角 `tipLen`。`predictAlpha` 0。参数见下表；模块 `slashTrail.ts`，调研 [SLASH-TRAIL.md](./SLASH-TRAIL.md)。
 
 ### 对缝调试
 
@@ -152,9 +152,8 @@
 
 | 键 | 默认 | 作用 |
 |----|------|------|
-| maxLen / life | 180 / 0.3 | 最长 px；满长收回秒 |
-| still / stopSpeed | 0.03 / 24 | 停手后再等才收；停手速度 px/s |
-| minDist / smooth / subdiv | 1.5 / 0.02 / 6 | 间距、低通秒、Catmull-Rom 细分 |
+| maxLen / life | 180 / 0.28 | 快划上限 px；点寿命秒（慢划长度 ≈ 速度 × life） |
+| minDist / smooth / subdiv | 6 / 0 / 6 | 结点间距、微抖低通秒、Catmull-Rom 细分 |
 | headW / tailW / tipLen | 6.5 / 0 / 10 | 刀尖宽、尾宽、三角探出 |
 | predictAlpha | 0 | 预测点不画 |
 
@@ -171,7 +170,8 @@
 | `slashIntent.ts` | 政策：锁 A、补切、消费走廊、青线、夹缝几何、提前闪 |
 | `slashWorld.ts` | 切网格（成功才 `consumeCutLine`）、顿帧、物理、overlay |
 | `slashHit.ts` | 凸包、裁线 |
-| `slashDebug.ts` | 夹缝 / 刀光 / 划痕 / 碎屑 / 闪 |
+| `slashDebug.ts` | 夹缝 / 刀光 / 碎屑 / 闪 overlay |
+| `slashTrail.ts` | 手指划痕（时间制） |
 | `cutTarget.ts` | 兼容 re-export，勿再写政策 |
 
 ## 刻意不做 / 已删的补丁

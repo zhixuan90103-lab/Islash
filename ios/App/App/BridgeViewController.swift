@@ -19,6 +19,8 @@ final class BridgeViewController: CAPBridgeViewController {
     override func capacitorDidLoad() {
         super.capacitorDidLoad()
         bridge?.registerPluginInstance(AdvancedHapticsPlugin())
+        bridge?.registerPluginInstance(NativeAudioPlugin())
         CAPLog.print("⚡️ AdvancedHapticsPlugin registered")
+        CAPLog.print("⚡️ NativeAudioPlugin registered")
     }
 }

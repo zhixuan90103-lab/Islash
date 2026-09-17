@@ -89,15 +89,13 @@ Kick 方向 = 切开 `bladeDir`（入点→出点）。`camera.position` 反向�
 
 ## 划痕（`TRAIL`，表现层）
 
-判定折线仍走 `INTERP_GAP`；**拖尾只记真实触点**，绘制向心 Catmull-Rom。最长像素 + 停手收回；收回时宽度随剩余长度一起收窄。
+判定折线仍走 `INTERP_GAP`；划痕是独立时间制丝带（`slashTrail.ts`）。可见长度 = 最近 `life` 秒路径，钳 `maxLen`。快划长、慢划短但可见。
 
 | 键 | 默认 | 作用 |
 |----|------|------|
-| maxLen | 180 | 沿路径最长（设计 px） |
-| life | 0.3 | 满长收到指尖的秒数 |
-| still | 0.03 | 判定停下后再等才开始收 |
-| stopSpeed | 24 | 低于此 px/s 视为停手 |
-| minDist / smooth / subdiv | 1.5 / 0.02 / 6 | 间距、刀尖低通、曲线细分 |
+| maxLen | 180 | 快划上限（设计 px） |
+| life | 0.28 | 点寿命（秒）。越大慢划拖尾越长 |
+| minDist / smooth / subdiv | 6 / 0 / 6 | 结点间距、微抖低通、曲线细分 |
 | headW / tailW / tipLen | 6.5 / 0 / 10 | 刀尖宽、尾宽、三角探出 |
 
 细则与调研对比：[SLASH-TRAIL.md](./SLASH-TRAIL.md)。意图叠层：[SLASH-INTENT.md](./SLASH-INTENT.md)。
@@ -122,5 +120,6 @@ Kick 方向 = 切开 `bladeDir`（入点→出点）。`camera.position` 反向�
 | `design.ts` | `SHAKE` `FX` `TRAIL` |
 | `screenShake.ts` | hit 公式、kick 包络、render 偏移 |
 | `slashWorld.ts` | 每刀独立顿帧、挤压、解冻冲量+kick |
-| `slashDebug.ts` | 碎屑、闪、划痕 overlay |
+| `slashDebug.ts` | 碎屑、闪 overlay |
+| `slashTrail.ts` | 手指划痕 |
 | `main.ts` | `slash.step` → `applyView` → render → `restoreView` |

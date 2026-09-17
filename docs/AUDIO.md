@@ -2,8 +2,8 @@
 
 配套：[AGENTS.md](../AGENTS.md) · [ENGINEERING.md](./ENGINEERING.md)
 
-> 本底座 **尚未实现音效**。下文是接入规范。  
-> 目标：真机 iOS 上连发 SFX **不卡帧、不卡声**。
+> 已落地两条：板上滑动 whoosh（每刀一次，慢划最长 1s）+ 切开裂木（大小+刀速调制）。  
+> 桌面走 WebAudio；真机走 `NativeAudio` 插件（`plugins/native-audio/`）。完整批处理规范仍如下。
 
 ## 1. 结论
 

@@ -130,6 +130,8 @@ export function createSlashInput(
     ) => void;
     onEnd: (stroke: SlashStroke | null) => void;
     onStroke?: (stroke: SlashStroke) => void;
+    /** 每个触点（含 <0.5px 的慢划），只给刀痕，不进切判定。 */
+    onTip?: (p: DesignPoint) => void;
     /** 仅刀痕画 ahead，不进切判定。下一 pointermove 会换一批。 */
     onPredicted?: (points: DesignPoint[]) => void;
   },
@@ -165,6 +167,7 @@ export function createSlashInput(
       lastAt: now,
     };
     hooks.onStroke?.(stroke);
+    hooks.onTip?.(p);
     e.preventDefault();
     try {
       stage.setPointerCapture(e.pointerId);
@@ -196,6 +199,7 @@ export function createSlashInput(
         if (dist(origin, p) >= ARM_DIST) stroke.armed = true;
       }
       if (added > 0) hooks.onStroke?.(stroke);
+      hooks.onTip?.(p);
       if (stroke.armed && added > 0) {
         const stepDt = dtSec / added;
         for (let i = before; i < stroke.points.length; i++) {

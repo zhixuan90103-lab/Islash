@@ -207,22 +207,22 @@ export const INTENT = {
 
 export const INTENT_DEFAULT = { ...INTENT };
 
-/** 刀痕拖尾：最长像素；停手从尾收到指尖。life = 满长收到指尖的秒数。 */
+/**
+ * 手指划痕（时间制）。
+ * 可见长度 = 最近 `life` 秒走出的路径，再钳 `maxLen`。
+ * 快划长、慢划短但始终能看见；停住则旧点过期，尾巴自己收。
+ */
 export const TRAIL = {
   /** 1 = 画手指划痕。0 = 先藏起来看刀光。 */
   show: 1,
-  /** 沿路径最长（设计 px）。滑再快也不超过。 */
+  /** 快划上限（设计 px）。慢划通常远短于此。 */
   maxLen: 180,
-  /** 满长收到指尖的时间（秒）。开始收回之后才算。 */
-  life: 0.3,
-  /** 低于此速度（px/s）视为停手。过大会把慢划当成停下。 */
-  stopSpeed: 24,
-  /** 判定停下后，再等这么久才开始收尾（秒）。手指微颤会刷新计时。 */
-  still: 0.03,
-  /** 新点最小间距。略大于微抖，仍跟上弯道。 */
-  minDist: 1.5,
-  /** 刀尖低通时间常数（秒）。只滤小抖，过大跟手变肉、轨迹变直。 */
-  smooth: 0.02,
+  /** 每个点活多久（秒）。越大，慢划拖尾越长。 */
+  life: 0.28,
+  /** 结点最小间距。过小会把微抖画成折痕。 */
+  minDist: 6,
+  /** 刀尖低通（秒）。只滤小于 minDist 的微抖；0 = 完全跟手。 */
+  smooth: 0,
   /** 绘制时每段 Catmull-Rom 细分。1 = 折线。 */
   subdiv: 6,
   headW: 6.5,
@@ -376,3 +376,25 @@ export const HAPTIC = {
 };
 
 export const HAPTIC_DEFAULT = { ...HAPTIC };
+
+/**
+ * 划切音效。
+ * 滑动 whoosh：只在板上、每刀一次，按时长拉伸（慢→最长 slideMaxDur）。
+ * 裂木：切开成功；音量/音调跟切开大小 + 刀速。
+ */
+export const SFX = {
+  speedRef: 250,
+  /** 慢划把 whoosh 拉到这么长（秒），不超过 1。 */
+  slideMaxDur: 1,
+  /** 快划最短播放（秒）。 */
+  slideMinDur: 0.22,
+  volSlow: 0.16,
+  volFast: 0.42,
+  crackVol: 0.7,
+  /** 小块切开的音调倍率（更尖）。大块用 crackRateBig。 */
+  crackRateSmall: 1.18,
+  crackRateBig: 0.82,
+  finishCrackMul: 1.16,
+};
+
+export const SFX_DEFAULT = { ...SFX };

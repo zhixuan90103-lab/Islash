@@ -193,7 +193,8 @@ J = mass * targetSpeed
 | `wood.ts` | 生成/重置、meshFromProfile |
 | `slashWorld.ts` | 会话编排、每刀顿帧、解冻冲量 |
 | `screenShake.ts` | 切开震屏 |
-| `slashDebug.ts` | 夹缝、刀光、划痕、碎屑、闪 overlay |
+| `slashDebug.ts` | 夹缝、刀光、碎屑、闪 overlay |
+| `slashTrail.ts` | 手指划痕（时间制） |
 | `slashDebugPanel.ts` | `#ui-root` 调参 |
 | `index.ts` | `mountSlashWorld` |
 

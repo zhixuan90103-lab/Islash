@@ -27,7 +27,7 @@
 | iOS 注入 | `scripts/bootstrap-ios.mjs` |
 | 音效方案（未实现） | `docs/AUDIO.md` |
 | 划切规范 | `docs/SLASH-DESIGN.md`（参数 `src/game/design.ts`） |
-| 打击感 | `docs/SLASH-FEEL.md`（`SHAKE` `FX` `TRAIL`；`screenShake.ts`） |
+| 打击感 | `docs/SLASH-FEEL.md`（`SHAKE` `FX` `TRAIL`；`screenShake.ts`；划痕 `slashTrail.ts`） |
 | 意图识别 | `docs/SLASH-INTENT.md`（状态机 `src/game/slashIntent.ts`） |
 | 关卡背景 + 投影 | `src/game/backdrop.ts`（贴图 `src/assets/bg-dojo.jpg`） |
 | 灯光 | `src/game/lights.ts`（参数 `LIGHT`） |

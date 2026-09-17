@@ -18,6 +18,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
 const iosAppDir = path.join(root, 'ios', 'App', 'App');
 const pluginDir = path.join(root, 'plugins', 'native-haptics');
+const audioPluginDir = path.join(root, 'plugins', 'native-audio');
 const pbxPath = path.join(root, 'ios', 'App', 'App.xcodeproj', 'project.pbxproj');
 const storyboardPath = path.join(iosAppDir, 'Base.lproj', 'Main.storyboard');
 const infoPlistPath = path.join(iosAppDir, 'Info.plist');
@@ -25,13 +26,21 @@ const infoPlistPath = path.join(iosAppDir, 'Info.plist');
 const FILES = [
   {
     name: 'AdvancedHapticsPlugin.swift',
+    dir: pluginDir,
     fileRef: '84A1375B3B1524A100AB0001',
     buildFile: '84A1375C3B1524A100AB0001',
   },
   {
     name: 'BridgeViewController.swift',
+    dir: pluginDir,
     fileRef: '84A1375D3B1524A100AB0002',
     buildFile: '84A1375E3B1524A100AB0002',
+  },
+  {
+    name: 'NativeAudioPlugin.swift',
+    dir: audioPluginDir,
+    fileRef: '84A1375F3B1524A100AB0003',
+    buildFile: '84A137603B1524A100AB0003',
   },
 ];
 
@@ -52,7 +61,7 @@ function ensureIosProject() {
 
 function copyPluginSources() {
   for (const f of FILES) {
-    const src = path.join(pluginDir, f.name);
+    const src = path.join(f.dir, f.name);
     const dest = path.join(iosAppDir, f.name);
     if (!fs.existsSync(src)) throw new Error(`Missing plugin source: ${src}`);
     fs.copyFileSync(src, dest);
