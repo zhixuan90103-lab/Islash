@@ -136,6 +136,9 @@ const SHAKE_SLIDERS: SliderSpec[] = [
   { key: 'roll', label: '滚转', min: 0, max: 0.12, step: 0.005 },
   { key: 'floor', label: '力度保底', min: 0, max: 0.4, step: 0.01 },
   { key: 'show', label: '震屏开', min: 0, max: 1, step: 1 },
+  { key: 'cancelPush', label: '取消推进', min: 0, max: 1.2, step: 0.02 },
+  { key: 'cancelPushIn', label: '推进时长', min: 0.03, max: 0.25, step: 0.01 },
+  { key: 'cancelPushOut', label: '回位时长', min: 0.08, max: 0.5, step: 0.02 },
 ];
 
 const FLASH_SLIDERS: SliderSpec[] = [
@@ -150,6 +153,7 @@ const FLASH_SLIDERS: SliderSpec[] = [
   { key: 'crackAlpha', label: '夹缝透明度', min: 0.08, max: 1, step: 0.02 },
   { key: 'crackLeave', label: '夹缝离轴', min: 6, max: 80, step: 1 },
   { key: 'crackHoldSpeed', label: '夹缝藏缝速度', min: 80, max: 800, step: 10 },
+  { key: 'crackRetract', label: '取消收回', min: 0.06, max: 0.4, step: 0.02 },
 ];
 
 const LIGHT_SLIDERS: SliderSpec[] = [

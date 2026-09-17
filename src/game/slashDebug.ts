@@ -114,6 +114,8 @@ export function createSlashOverlay(stage: HTMLElement): {
   push: (p: DesignPoint) => void;
   setPreview: (c0: DesignPoint | null, c1?: DesignPoint) => void;
   setCrack: (c0: DesignPoint | null, c1?: DesignPoint) => void;
+  retractCrack: () => void;
+  allowCrack: () => void;
   setPredicted: (points: DesignPoint[]) => void;
   setIntentDebug: (info: IntentDebug | null) => void;
   flash: (c0: DesignPoint, c1: DesignPoint, follow?: boolean) => void;
@@ -134,6 +136,15 @@ export function createSlashOverlay(stage: HTMLElement): {
   const trail = createFingerTrail();
   const flashes: FlashSeg[] = [];
   let crack: { c0: DesignPoint; c1: DesignPoint } | null = null;
+  let crackRetract: {
+    c0: DesignPoint;
+    from: DesignPoint;
+    born: number;
+    w0: number;
+    w1: number;
+  } | null = null;
+  let crackDraw = 1;
+  let crackHeldOff = false;
   let intentDebug: IntentDebug | null = null;
   let lastPaint = 0;
   const chips: Chip[] = [];
@@ -166,27 +177,47 @@ export function createSlashOverlay(stage: HTMLElement): {
     wipe();
     tick(now);
 
+    crackDraw = 1;
+    if (crackRetract && crack) {
+      const dur = Math.max(0.04, FLASH.crackRetract);
+      const t = Math.min(1, (now - crackRetract.born) / (dur * 1000));
+      const u = 1 - (1 - t) ** 3;
+      crackDraw = 1 - u;
+      crack = {
+        c0: crackRetract.c0,
+        c1: {
+          x: crackRetract.from.x + (crackRetract.c0.x - crackRetract.from.x) * u,
+          y: crackRetract.from.y + (crackRetract.c0.y - crackRetract.from.y) * u,
+        },
+      };
+      if (t >= 1) {
+        crack = null;
+        crackRetract = null;
+        crackDraw = 0;
+      }
+    }
+
     const dpr = canvas.width / DESIGN_WIDTH;
 
-    if (crack) {
+    if (crack && crackDraw > 0.02) {
       const dx = crack.c1.x - crack.c0.x;
       const dy = crack.c1.y - crack.c0.y;
       const len = Math.hypot(dx, dy);
       if (len >= 1) {
         const nx = -dy / len;
         const ny = dx / len;
-        const startW = Math.min(
+        const liveW = Math.min(
           FLASH.crackWMax,
           FLASH.crackW0 + len * FLASH.crackGrow,
         );
-        const w0 = startW * 0.5;
-        const w1 = FLASH.crackW * 0.5;
+        const w0 = (crackRetract?.w0 ?? liveW * 0.5) * crackDraw;
+        const w1 = (crackRetract?.w1 ?? FLASH.crackW * 0.5) * crackDraw;
         ctx.save();
         ctx.shadowBlur = 0;
         const cr = (FLASH.crackColor >> 16) & 255;
         const cg = (FLASH.crackColor >> 8) & 255;
         const cb = FLASH.crackColor & 255;
-        ctx.fillStyle = `rgba(${cr}, ${cg}, ${cb}, ${FLASH.crackAlpha})`;
+        ctx.fillStyle = `rgba(${cr}, ${cg}, ${cb}, ${FLASH.crackAlpha * crackDraw})`;
         ctx.beginPath();
         ctx.moveTo(crack.c0.x + nx * w0, crack.c0.y + ny * w0);
         ctx.lineTo(crack.c1.x + nx * w1, crack.c1.y + ny * w1);
@@ -473,6 +504,8 @@ export function createSlashOverlay(stage: HTMLElement): {
   const begin = () => {
     trail.begin();
     crack = null;
+    crackRetract = null;
+    crackHeldOff = false;
     intentDebug = null;
     lastPaint = 0;
     wipe();
@@ -483,7 +516,32 @@ export function createSlashOverlay(stage: HTMLElement): {
   };
 
   const setCrack = (c0: DesignPoint | null, c1?: DesignPoint) => {
+    if (crackHeldOff) return;
     crack = c0 && c1 ? { c0, c1 } : null;
+  };
+
+  const retractCrack = () => {
+    crackHeldOff = true;
+    if (crackRetract || !crack) return;
+    const dx = crack.c1.x - crack.c0.x;
+    const dy = crack.c1.y - crack.c0.y;
+    const len = Math.hypot(dx, dy);
+    const startW = Math.min(
+      FLASH.crackWMax,
+      FLASH.crackW0 + len * FLASH.crackGrow,
+    );
+    crackRetract = {
+      c0: { x: crack.c0.x, y: crack.c0.y },
+      from: { x: crack.c1.x, y: crack.c1.y },
+      born: performance.now(),
+      w0: startW * 0.5,
+      w1: FLASH.crackW * 0.5,
+    };
+  };
+
+  const allowCrack = () => {
+    crackHeldOff = false;
+    crackRetract = null;
   };
 
   const setPredicted = (points: DesignPoint[]) => {
@@ -568,13 +626,15 @@ export function createSlashOverlay(stage: HTMLElement): {
 
   const end = () => {
     trail.end();
-    crack = null;
+    if (!crackRetract) crack = null;
   };
 
   const clear = () => {
     trail.clear();
     flashes.length = 0;
     crack = null;
+    crackRetract = null;
+    crackHeldOff = false;
     intentDebug = null;
     lastPaint = 0;
     wipe();
@@ -590,6 +650,8 @@ export function createSlashOverlay(stage: HTMLElement): {
     push,
     setPreview,
     setCrack,
+    retractCrack,
+    allowCrack,
     setPredicted,
     setIntentDebug,
     flash,

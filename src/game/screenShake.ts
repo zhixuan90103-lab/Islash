@@ -33,6 +33,7 @@ export function cutHit(speedPxPerSec: number, dropVol: number, keepVol: number):
 
 export function createScreenShake(camera: THREE.PerspectiveCamera): {
   hit: (amount: number, dir: THREE.Vector3, kickMul?: number) => void;
+  pushIn: () => void;
   step: (dt: number) => void;
   applyView: () => void;
   restoreView: () => void;
@@ -49,6 +50,10 @@ export function createScreenShake(camera: THREE.PerspectiveCamera): {
   let phase: 'idle' | 'attack' | 'settle' = 'idle';
   let age = 0;
   let kickScale = 1;
+  let dolly = 0;
+  let dollyFrom = 0;
+  let dollyPhase: 'idle' | 'in' | 'out' = 'idle';
+  let dollyAge = 0;
 
   const capKick = () => {
     const max = SHAKE.kick * kickScale * 1.8;
@@ -61,6 +66,13 @@ export function createScreenShake(camera: THREE.PerspectiveCamera): {
   };
 
   return {
+    pushIn: () => {
+      if (SHAKE.cancelPush <= 0) return;
+      dollyFrom = dolly;
+      dollyPhase = 'in';
+      dollyAge = 0;
+    },
+
     hit: (amount, dir, kickMul = 1) => {
       if (!SHAKE.show) return;
       const hit = Math.min(1, Math.max(0, amount));
@@ -83,6 +95,28 @@ export function createScreenShake(camera: THREE.PerspectiveCamera): {
       const d = Math.min(0.05, Math.max(0, dt));
       clock += d;
       trauma = Math.max(0, trauma - SHAKE.decay * d);
+      if (dollyPhase !== 'idle') {
+        dollyAge += d;
+        if (dollyPhase === 'in') {
+          const dur = Math.max(0.02, SHAKE.cancelPushIn);
+          const k = easeOutQuad(dollyAge / dur);
+          dolly = dollyFrom + (1 - dollyFrom) * k;
+          if (dollyAge >= dur) {
+            dolly = 1;
+            dollyPhase = 'out';
+            dollyAge = 0;
+          }
+        } else {
+          const dur = Math.max(0.04, SHAKE.cancelPushOut);
+          const k = easeInCubic(dollyAge / dur);
+          dolly = 1 - k;
+          if (dollyAge >= dur) {
+            dolly = 0;
+            dollyPhase = 'idle';
+            dollyAge = 0;
+          }
+        }
+      }
       if (phase === 'idle') return;
       age += d;
       if (phase === 'attack') {
@@ -116,6 +150,9 @@ export function createScreenShake(camera: THREE.PerspectiveCamera): {
     applyView: () => {
       camera.position.copy(rest);
       camera.rotation.set(0, 0, 0);
+      if (dolly > 1e-5 && SHAKE.cancelPush > 0) {
+        camera.position.z -= SHAKE.cancelPush * dolly;
+      }
       if (!SHAKE.show) return;
       const moving = phase !== 'idle' || trauma > 0;
       if (!moving) return;

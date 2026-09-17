@@ -71,6 +71,7 @@ export async function mountSlashWorld(
   let lastMeshFail: { c0: DesignPoint; c1: DesignPoint } | null = null;
   let strokeCuts: { c0: DesignPoint; c1: DesignPoint }[] = [];
   let lastClearedLine: ConsumedLine | null = null;
+  let cancelPushed = false;
   const pendingFly: {
     rec: PhysBody;
     recKeep?: PhysBody;
@@ -335,6 +336,7 @@ export async function mountSlashWorld(
         lastClearedLine = null;
         overlay.begin();
         gameAudio.unlock();
+        cancelPushed = false;
       }
     },
     onTip: (p) => {
@@ -353,8 +355,18 @@ export async function mountSlashWorld(
         new Set(),
         dtSec,
       );
-      if (frame.crack) overlay.setCrack(frame.crack.c0, frame.crack.c1);
-      else overlay.setCrack(null);
+      if (frame.scribble) {
+        overlay.retractCrack();
+        if (!cancelPushed) {
+          shake.pushIn();
+          cancelPushed = true;
+        }
+      } else {
+        overlay.allowCrack();
+        cancelPushed = false;
+        if (frame.crack) overlay.setCrack(frame.crack.c0, frame.crack.c1);
+        else overlay.setCrack(null);
+      }
       const onBoard =
         !!frame.enter &&
         (frame.phase === 'track' || frame.phase === 'aimed' || !!frame.commit);

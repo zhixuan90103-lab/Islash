@@ -164,7 +164,7 @@ export const SLASH = {
  */
 export const START = {
   /** 起点：最慢时的吸边半径（设计 px）。 */
-  slowDist: 10,
+  slowDist: 5,
   /** 起点：达到 fastSpeed 时的吸边半径。 */
   fastDist: 36,
   /** 速度尺子：达到此 px/s 视为「满补偿」。 */
@@ -192,7 +192,7 @@ export const START = {
    * 锁 A 后板内路程 / A→出点直线。大于此本刀不算切开。
    * 未切开就出板后再进是新刀，不必抬手。
    */
-  pathChordMax: 1.4,
+  pathChordMax: 1.7,
 };
 
 export const START_DEFAULT = { ...START };
@@ -295,6 +295,8 @@ export const FLASH = {
   crackGrow: 0.14,
   /** 入点宽度上限。 */
   crackWMax: 6.6,
+  /** 乱划取消：夹缝从刀尖收回 A 的时长（秒）。 */
+  crackRetract: 0.16,
 };
 
 /**
@@ -349,6 +351,12 @@ export const SHAKE = {
   /** 顿帧最短/最长（秒）。按 hit 插值；只冻物理，刀光/输入不停。 */
   freezeMin: 0.032,
   freezeMax: 0.1,
+  /** 乱划取消：镜头沿 Z 推进（世界单位）。0 = 关。不走切开震屏。 */
+  cancelPush: 0.06,
+  /** 推到最近的时间（秒）。 */
+  cancelPushIn: 0.13,
+  /** 回到 rest 的时间（秒）。 */
+  cancelPushOut: 0.1,
 };
 
 /** 切开接触：碎屑、挤压、重砍闪、解冻加踢。 */

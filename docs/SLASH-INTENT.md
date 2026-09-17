@@ -43,7 +43,7 @@
 2. **出另一条边**（或快划补出点）。同一条边进出不算。
 3. **切缝够深**：弦长 ≥ `max(minChord, hullChordRatio × 包围盒短边)`（`throughThreshold`）。默认 4px 与 4%。
 4. **不在余势里**（见下）。
-5. **板内不乱绕**：锁 A 后凸包内路程 / A→出点直线 ≤ `START.pathChordMax`（默认 1.4）。真出边和板内补切都比。超了不切开。
+5. **板内不乱绕**：锁 A 后凸包内路程 / A→出点直线 ≤ `START.pathChordMax`（默认 1.7）。真出边和板内补切都比。超了不切开。
 6. **抬手停在板内不切。** `pointercancel` 收刀，已切的保留。
 7. 网格切开失败**不**写余势，并恢复本刀 `progress`，同一条线仍可再交。  
    出边时微段没裁到凸包：用锁死的 A→刀尖无限直线出点再判两边/深度。未切开就出板则清 A，再进是新刀（不必抬手）。板心按下再拖出仍不记刀。
@@ -99,6 +99,7 @@ A **只写一次**（`stroke.enterLock`，带 `meshId` + 板上局部 XY）。�
 - 入口宽（随缝长加到 `crackWMax`）、指尖细（`crackW`），色 `crackColor` `#b1591a`，透明度 `crackAlpha` 0.65。
 - 进板即可画，不必等刀光锁定。
 - 余势拦住时不对留下的新块跟手画夹缝。
+- 乱划取消：夹缝从刀尖收回 A，同时变细、变淡消失（`FLASH.crackRetract`，默认 0.16s，ease-out），本刀不再画缝。出板再进的新刀才重新画。同时镜头推进再回位（`SHAKE.cancelPush`），只改渲染相机。
 
 ### 刀光（`FLASH`）
 
@@ -131,7 +132,7 @@ A **只写一次**（`stroke.enterLock`，带 `meshId` + 板上局部 XY）。�
 
 | 键 | 默认 | 作用 |
 |----|------|------|
-| slowDist / fastDist | 10 / 36 | 起点半径：最慢 / 满速 |
+| slowDist / fastDist | 5 / 36 | 起点半径：最慢 / 满速 |
 | fastSpeed | 160 | 速度尺子满档 |
 | endTravelFast | 0.8 | 满速终点行程门槛（最慢为 1） |
 | scoreMin | 0.35 | 起点总分低于此不帮 |
@@ -139,7 +140,7 @@ A **只写一次**（`stroke.enterLock`，带 `meshId` + 板上局部 XY）。�
 | speedWindow | 4 | 中位速度段数 |
 | corridor | 8 | 余势走廊半宽（整段到缝的距离；穿过为 0） |
 | alongMin | 0.15 | 余势：段方向点积大于此才算顺着走 |
-| pathChordMax | 1.4 | 板内路程 / A→出点直线上限；超了本刀不算。调试面板「乱划路程比」 |
+| pathChordMax | 1.7 | 板内路程 / A→出点直线上限；超了本刀不算。调试面板「乱划路程比」 |
 
 ### `INTENT`
 
@@ -161,6 +162,7 @@ A **只写一次**（`stroke.enterLock`，带 `meshId` + 板上局部 XY）。�
 | crackColor / crackAlpha | `#b1591a` / 0.65 | 夹缝色与透明度 |
 | crackLeave / crackHoldSpeed | 28 / 280 | 快滑离轴藏缝（px / px/s） |
 | crackW / crackW0 / crackGrow / crackWMax | 1.2 / 2.5 / 0.14 / 6.6 | 指尖宽、入点宽 |
+| crackRetract | 0.16 | 乱划取消时夹缝收回时长（秒） |
 
 ### `TRAIL`
 
