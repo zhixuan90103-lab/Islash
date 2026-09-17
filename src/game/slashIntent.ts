@@ -489,7 +489,6 @@ export function resolveCutBySegment(
     const micro = clipChordToHull(a, b, proj.hull);
     /**
      * 入边用「本划最后一个板外点 → 刀尖」，不用当前 5px 微段。
-     * 微段切角噪声会锁错边（GNOME/Android：未过 slop 不锁方向）。
      */
     const strokeClip =
       outside && insideB
