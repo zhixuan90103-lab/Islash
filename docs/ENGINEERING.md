@@ -111,9 +111,9 @@ SceneDelegate.rootViewController = BridgeViewController()
 Swift **没有** `prepare`；引擎在 `load()` 启动。UIKit 反馈在主线程触发。验收用 HUD **点我震动**（`impact`）和状态行 `plugin: true`。  
 业务节奏（具名事件、cooldown、开关）写在游戏层，不要改插件除非新增原生方法。
 
-## 7b. Audio（尚未实现）
+## 7b. Audio
 
-本仓库无播放代码。接入规范见 [AUDIO.md](./AUDIO.md)：
+已落地：`src/audio/gameAudio.ts` + `SFX`（板上滑动 whoosh、切开裂木）。完整批处理规范见 [AUDIO.md](./AUDIO.md)：
 
 - Loading **预解码**；热路径禁止 `new Audio()` / decode / 读盘
 - `AudioBatcher`：**每帧最多一次** Capacitor 桥

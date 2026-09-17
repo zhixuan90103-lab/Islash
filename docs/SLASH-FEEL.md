@@ -4,7 +4,7 @@
 编排：`src/game/slashWorld.ts`。震屏：`src/game/screenShake.ts`。碎屑/闪：`src/game/slashDebug.ts` overlay。  
 玩法总则：[SLASH-DESIGN.md](./SLASH-DESIGN.md)。划痕调研：[SLASH-TRAIL.md](./SLASH-TRAIL.md)。
 
-本文是**当前已落地规则**。音效仍未接（[AUDIO.md](./AUDIO.md)）。马达触觉见下文「刀的触觉」；接线仍走 [HAPTICS.md](./HAPTICS.md)。
+本文是**当前已落地规则**。音效已接 `src/audio/gameAudio.ts`（`SFX`；方案见 [AUDIO.md](./AUDIO.md)）。马达触觉见下文「刀的触觉」；接线仍走 [HAPTICS.md](./HAPTICS.md)。
 
 ## 原则
 
@@ -93,8 +93,8 @@ Kick 方向 = 切开 `bladeDir`（入点→出点）。`camera.position` 反向�
 
 | 键 | 默认 | 作用 |
 |----|------|------|
-| maxLen | 200 | 快划上限（设计 px） |
-| life | 0.28 | 点寿命（秒）。越大慢划拖尾越长 |
+| maxLen | 220 | 快划上限（设计 px） |
+| life | 0.16 | 点寿命（秒）。抬手/停手收回；越大拖尾越长 |
 | minDist / smooth / subdiv | 6 / 0 / 6 | 结点间距、微抖低通、曲线细分 |
 | headW / tailW / tipLen | 6.5 / 0 / 10 | 刀尖宽、尾宽、三角探出 |
 

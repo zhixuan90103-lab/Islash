@@ -14,6 +14,7 @@ import { applyGameLights } from './lights';
 import { mountSlashDebugPanel } from './slashDebugPanel';
 import { createSlashOverlay } from './slashDebug';
 import { cutMeshBySlash, prepareCuttable } from './slashCut';
+import { projectMeshHull } from './slashHit';
 import {
   createSlashInput,
   segmentSpeedPxPerSec,
@@ -61,6 +62,7 @@ export async function mountSlashWorld(
   beginEnter();
   let nextBoardIn = -1;
   let lastCommit: { c0: DesignPoint; c1: DesignPoint } | null = null;
+  let lastMeshFail: { c0: DesignPoint; c1: DesignPoint } | null = null;
   const pendingFly: {
     rec: PhysBody;
     recKeep?: PhysBody;
@@ -189,6 +191,7 @@ export async function mountSlashWorld(
     const result = cutMeshBySlash(commit.mesh, camera, commit.c0, commit.c1);
     if (!result) {
       report('碰到了但切开失败');
+      lastMeshFail = { c0: commit.c0, c1: commit.c1 };
       if (!stroke.progress.has(commit.mesh.id)) {
         const dx = commit.c1.x - commit.c0.x;
         const dy = commit.c1.y - commit.c0.y;
@@ -311,6 +314,7 @@ export async function mountSlashWorld(
     onStroke: (stroke) => {
       if (stroke.points.length === 1) {
         lastCommit = null;
+        lastMeshFail = null;
         overlay.begin();
         gameAudio.unlock();
       }
@@ -340,6 +344,7 @@ export async function mountSlashWorld(
           segmentSpeedPxPerSec(lastSeg[0], lastSeg[1], dtSec),
         );
       }
+      let meshFailNow = false;
       if (frame.commit) {
         const ok = applyCommit(
           stroke,
@@ -349,7 +354,10 @@ export async function mountSlashWorld(
           frame.commitFlash,
           frame.crack,
         );
-        if (!ok) bladeHaptics.cancel();
+        if (!ok) {
+          meshFailNow = true;
+          bladeHaptics.cancel();
+        }
       } else {
         bladeHaptics.onFrame(frame);
         if (frame.earlyFlash) {
@@ -358,6 +366,13 @@ export async function mountSlashWorld(
         }
       }
       overlay.setPreview(null);
+      const trackedMesh =
+        frame.meshId != null
+          ? wood.cuttables.find((m) => m.id === frame.meshId)
+          : wood.cuttables[0];
+      const hull = trackedMesh
+        ? projectMeshHull(trackedMesh, camera)?.hull ?? null
+        : null;
       overlay.setIntentDebug({
         geom: frame.cyan,
         locked:
@@ -367,6 +382,15 @@ export async function mountSlashWorld(
         commit: lastCommit,
         stable: stroke.intent.stable,
         lockedFlag: frame.locked,
+        phase: frame.phase,
+        why: meshFailNow ? '剖分失败（剪影过了轮廓没切开）' : frame.why,
+        hull,
+        enter: stroke.enterLock?.c0 ?? frame.enter,
+        enterEdge: frame.enterEdge,
+        travel: frame.travelRatio,
+        occupying: frame.phase === 'hold',
+        consumed: stroke.consumed,
+        meshFail: lastMeshFail,
       });
     },
     onEnd: (stroke) => {

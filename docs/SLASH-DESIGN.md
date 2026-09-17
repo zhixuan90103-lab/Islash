@@ -7,14 +7,16 @@
 打击感：[SLASH-FEEL.md](./SLASH-FEEL.md)（顿帧、震屏、碎屑、划痕）。  
 本文是**当前工程已落地的规则**。调研里的「Box 三角剖分 / 不做物理」已被覆盖。
 
+近期已落地（参数以 `design.ts` 为准）：切缝深度 `max(minChord, 短边×hullChordRatio)`（4px / 4%）；入点 `enterLock` 只写一次且绑该 mesh；夹缝 `#b1591a` α0.65，出板即灭，慢滑跟转角、快滑离轴才藏；划痕时间制 `slashTrail.ts`（`life` 0.16、`maxLen` 220），触点走 `onTip`。一次滑动同方向余势不切第二刀（8px 走廊）；反转或横走出走廊可切留下块。已回滚：出板才放行 / 加宽走廊当下一刀开关。
+
 ## 一句话
 
 滑动 = 刀；板 = 木头。划穿后 1 变 2：大块留下静止，小块被踢飞。较大块体积低于整板 `CUT.finishRemain`（默认 1/10）时为完成切割，两块都沿刀向飞出。图库三块循环进场。无地面、无关卡、无分数。
 
 ## 规则
 
-1. **一刀成立**：进出落在**两条不同凸包边上**，且切缝够深（`minChord` / `hullChordRatio`）。同一条边蹭不算。终点帮助：对准青线且行程 ≥ T(速度) 时可补出点；最慢须 100% 真出边。
-2. **下一刀**：同一按住可以多刀，但一刀是一条 A→B，不是一次按下。网格切开成功后该有向直线被本划消费；走廊内沿该方向的续滑（含真出边、对留下块再锁 A）不再出刀。横走出走廊或沿该线折返后可再切。细则见意图文。
+1. **一刀成立**：进出落在**两条不同凸包边上**，且切缝够深。深度 = `max(minChord, hullChordRatio × 投影包围盒短边)`（`throughThreshold`），默认 **4px** 与 **4%**。不要再套一层 `max(4, …)`。同一条边蹭不算。近共面邻边只要仍是两条凸包边且弦够深就能切。终点帮助：对准青线且行程 ≥ T(速度) 时可补出点；最慢须 100% 真出边。
+2. **下一刀**：同一按住可以多刀。切开后只拦「还顺着那条缝甩」；转走、离开走廊或折返后可再切，**不必抬手**，切开面可以当入边。细则见意图文。
 3. **命中**：微段与轮廓求交；刀线用入点→出点。从板外进，或起点打分锁 A。**A 锁死到本刀切开或抬手**，弯刀不改入点。板心按下再拖出不记刀。抬手停在板内不切。出边微段跳过凸包时用锁死的 A→刀尖打穿出点。
 4. **反馈**：夹缝（入边→刀尖）在下，刀光在中，手指划痕在上。刀光不等于提交。切开成功才顿帧/碎屑/踢屏，见 [SLASH-FEEL.md](./SLASH-FEEL.md)。
 5. **切开**：用刀线切开 **2D 轮廓**（`userData.profile`），每块按同一配方重新挤出。删旧 mesh，加两块。面积×厚度大的留下（static），小的变 dynamic。子块继承整板 `originVolume`。
@@ -168,7 +170,16 @@ J = mass * targetSpeed
 | maxUpFraction | 0.7 | 冲量向上分量上限 |
 | camYScale | 0.25 | 朝屏幕向量的 Y 缩放 |
 
-`SLASH`：`armDist` 8、`interpGap` 5、`minChord` 4、`hullChordRatio` 0.04。提交时弦长必须够深。
+### `SLASH`
+
+| 键 | 默认 | 作用 |
+|----|------|------|
+| armDist | 8 | 出刃距离（px） |
+| interpGap | 5 | 判定折线插点间距 |
+| minChord | 4 | 切缝最短（设计 px） |
+| hullChordRatio | 0.04 | 另须 ≥ 投影包围盒短边的这一比例 |
+
+提交：`弦长 ≥ max(minChord, hullChordRatio × 短边)`。小块主要卡 `minChord`（4px）；大板卡短边 4%。
 
 入点 / 补切 / 已消费直线 / 刀光 / 夹缝 / 划痕参数见 [SLASH-INTENT.md](./SLASH-INTENT.md)（`START` `INTENT` `FLASH` `TRAIL`）。
 
@@ -182,7 +193,7 @@ J = mass * targetSpeed
 | `backdrop.ts` | 关卡背景贴图 + 接影板 |
 | `lights.ts` | 主光 / 补光 / 半球；读 `LIGHT` |
 | `cutProgressHud.ts` | `#ui-root` 顶进度条 |
-| `slashInput.ts` | 指针折线、出刃、滑速；本划 `consumed[]` |
+| `slashInput.ts` | 指针折线、出刃、滑速；本划 `consumed[]` / `enterLock` |
 | `slashHit.ts` | 轮廓、射线、点在凸包 |
 | `slashIntent.ts` | 意图：锁 A、补切、消费走廊、夹缝/青线、提前刀光 |
 | `slashCut.ts` | 板面 XY 上切轮廓，重建两块网格 |

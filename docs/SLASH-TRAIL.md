@@ -1,6 +1,6 @@
 # 常规刀痕拖尾怎么做
 
-调研结论。本仓现状：**时间制**。可见段 = 最近 `TRAIL.life`（默认 0.28s）的触点路径，再钳 `maxLen` 200px。快划长、慢划短但始终能看见。刀尖宽、尾细、三角尖。触点来自 `onTip`（与切开折线分离）。实现 `src/game/slashTrail.ts`。参数真源 `design.ts`，打击感总则 [SLASH-FEEL.md](./SLASH-FEEL.md)。
+调研结论。本仓现状：**时间制**。可见段 = 最近 `TRAIL.life`（默认 0.16s）的触点路径，再钳 `maxLen` 220px。快划长、慢划短但始终能看见。刀尖宽、尾细、三角尖。触点来自 `onTip`（与切开折线分离）。实现 `src/game/slashTrail.ts`。参数真源 `design.ts`，打击感总则 [SLASH-FEEL.md](./SLASH-FEEL.md)。
 
 拖尾是**表现**，和「一刀贯穿」判定无关。
 
@@ -21,7 +21,7 @@ Unity `TrailRenderer`（Fruit Ninja 教程、Zigurous 都用这个）：
 
 要点（业界时间制）：**长度由时间决定，不是固定像素。** 划得快，0.2s 内走出的路径长，拖尾就长；停住，旧点过期，尾巴自己收掉。
 
-本仓：寿命窗口 + `maxLen` 上限。快划被钳在 200px；慢划长度 ≈ 速度 × life，不会被收成「必须划满才看见」。
+本仓：寿命窗口 + `maxLen` 上限。快划被钳在 220px；慢划长度 ≈ 速度 × life，不会被收成「必须划满才看见」。
 
 ## 2. 三种常见画法
 
@@ -74,7 +74,7 @@ https://www.flutterclutter.dev/flutter/tutorials/flutter-game-tutorial-fruit-nin
 | 几何 | canvas 填左右轮廓 | 同款丝带，或 GPU Trail |
 | 贴图 | 纯白填充 | 常用 head-body-tail 条带图 |
 
-宽度按「距刀尖的路径长度」采样。收回：满长 / `life`，同时 `width × shownLen/retractFrom`。
+宽度按「距刀尖的路径长度」采样。点过期后丝带变短，刀尖始终贴手指。判定折线仍走 `INTERP_GAP`；划痕只吃 `onTip`。
 
 ## 5. 来源
 

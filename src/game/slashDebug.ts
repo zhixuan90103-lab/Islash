@@ -1,6 +1,6 @@
 import { DESIGN_HEIGHT, DESIGN_WIDTH } from '../adapt/design';
-import { FINALE, FLASH, FX, INTENT } from './design';
-import type { DesignPoint } from './slashInput';
+import { FINALE, FLASH, FX, INTENT, START } from './design';
+import type { ConsumedLine, DesignPoint } from './slashInput';
 import { createFingerTrail } from './slashTrail';
 
 export type IntentDebug = {
@@ -9,6 +9,15 @@ export type IntentDebug = {
   commit: { c0: DesignPoint; c1: DesignPoint } | null;
   stable: number;
   lockedFlag: boolean;
+  phase?: string;
+  why?: string;
+  hull?: DesignPoint[] | null;
+  enter?: DesignPoint | null;
+  enterEdge?: number;
+  travel?: number;
+  occupying?: boolean;
+  consumed?: ConsumedLine[];
+  meshFail?: { c0: DesignPoint; c1: DesignPoint } | null;
 };
 
 type Chip = {
@@ -254,10 +263,11 @@ export function createSlashOverlay(stage: HTMLElement): {
         chord: { c0: DesignPoint; c1: DesignPoint },
         color: string,
         dash: boolean,
+        width = 2.5,
       ) => {
         ctx.save();
         ctx.strokeStyle = color;
-        ctx.lineWidth = 2.5;
+        ctx.lineWidth = width;
         ctx.setLineDash(dash ? [6, 4] : []);
         ctx.beginPath();
         ctx.moveTo(chord.c0.x, chord.c0.y);
@@ -272,8 +282,51 @@ export function createSlashOverlay(stage: HTMLElement): {
         ctx.fill();
         ctx.restore();
       };
+      const hull = intentDebug?.hull;
+      if (hull && hull.length >= 3) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(90, 255, 140, 0.85)';
+        ctx.lineWidth = 1.6;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.moveTo(hull[0].x, hull[0].y);
+        for (let i = 1; i < hull.length; i++) ctx.lineTo(hull[i].x, hull[i].y);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.restore();
+      }
+      for (const line of intentDebug?.consumed ?? []) {
+        const w = START.corridor;
+        const reach = 900;
+        const a = {
+          x: line.ox - line.dx * reach,
+          y: line.oy - line.dy * reach,
+        };
+        const b = {
+          x: line.ox + line.dx * reach,
+          y: line.oy + line.dy * reach,
+        };
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255, 140, 40, 0.28)';
+        ctx.lineWidth = w * 2;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(255, 140, 40, 0.95)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([8, 5]);
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+        ctx.restore();
+      }
       if (intentDebug?.geom) {
         strokeChord(intentDebug.geom, 'rgba(80, 220, 255, 0.9)', true);
+      }
+      if (intentDebug?.meshFail) {
+        strokeChord(intentDebug.meshFail, 'rgba(255, 60, 60, 0.95)', true, 3.5);
       }
       if (intentDebug?.commit) {
         strokeChord(intentDebug.commit, 'rgba(255, 210, 40, 0.95)', false);
@@ -290,22 +343,46 @@ export function createSlashOverlay(stage: HTMLElement): {
         ctx.restore();
         strokeChord(intentDebug.locked, 'rgba(255, 160, 230, 1)', false);
       }
+      const a0 = intentDebug?.enter;
+      if (a0) {
+        ctx.save();
+        ctx.fillStyle = 'rgba(255, 40, 40, 1)';
+        ctx.beginPath();
+        ctx.arc(a0.x, a0.y, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,0.95)';
+        ctx.font = 'bold 12px ui-sans-serif, system-ui, sans-serif';
+        ctx.fillText('A', a0.x + 8, a0.y - 6);
+        ctx.restore();
+      }
       ctx.save();
       ctx.font = '13px ui-sans-serif, system-ui, sans-serif';
-      ctx.fillStyle = 'rgba(255,255,255,0.9)';
-      const lockTxt = intentDebug?.lockedFlag
-        ? '锁定中 ← 应见粉线'
-        : intentDebug?.locked && intentDebug.commit
-          ? '已切开（粉=锁定弦 黄=真缝）'
-          : '未锁定（先停在板内）';
-      const stable = intentDebug?.stable ?? 0;
-      ctx.fillText(`intent ${lockTxt}  ${stable}/${INTENT.lockSegs}`, 10, 22);
+      const phase = intentDebug?.phase ?? '-';
+      const why = intentDebug?.why || '—';
+      const travel = intentDebug?.travel ?? 0;
+      const e = intentDebug?.enterEdge ?? -1;
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
+      ctx.fillRect(6, 6, 378, 72);
+      ctx.fillStyle = 'rgba(255,255,255,0.95)';
+      ctx.fillText(`相 ${phase}  边${e}  行程${(travel * 100).toFixed(0)}%`, 10, 22);
+      ctx.fillStyle = why.startsWith('commit')
+        ? 'rgba(120,255,160,0.95)'
+        : why.includes('剖分')
+          ? 'rgba(255,90,90,0.95)'
+          : 'rgba(255,220,120,0.95)';
+      ctx.fillText(why, 10, 40);
+      ctx.fillStyle = 'rgba(90, 255, 140, 0.9)';
+      ctx.fillText('绿=凸包', 10, 58);
       ctx.fillStyle = 'rgba(80, 220, 255, 0.9)';
-      ctx.fillText('青=外推', 10, 38);
+      ctx.fillText('青=外推', 70, 58);
       ctx.fillStyle = 'rgba(255, 80, 200, 0.95)';
-      ctx.fillText('粉=锁定', 70, 38);
+      ctx.fillText('粉=锁定', 130, 58);
       ctx.fillStyle = 'rgba(255, 210, 40, 0.95)';
-      ctx.fillText('黄=切开', 130, 38);
+      ctx.fillText('黄=切开', 190, 58);
+      ctx.fillStyle = 'rgba(255, 140, 40, 0.95)';
+      ctx.fillText('橙=已消费', 250, 58);
+      ctx.fillStyle = 'rgba(255, 60, 60, 0.95)';
+      ctx.fillText('红虚=剖分失败', 10, 72);
       ctx.restore();
     }
 

@@ -25,7 +25,7 @@
 | Capacitor | `capacitor.config.ts`（`contentInset: never`） |
 | 构建 | `vite.config.ts`（**`base: './'`**） |
 | iOS 注入 | `scripts/bootstrap-ios.mjs` |
-| 音效方案（未实现） | `docs/AUDIO.md` |
+| 音效 | `src/audio/gameAudio.ts`（`SFX`；方案 [docs/AUDIO.md](docs/AUDIO.md)） |
 | 划切规范 | `docs/SLASH-DESIGN.md`（参数 `src/game/design.ts`） |
 | 打击感 | `docs/SLASH-FEEL.md`（`SHAKE` `FX` `TRAIL`；`screenShake.ts`；划痕 `slashTrail.ts`） |
 | 意图识别 | `docs/SLASH-INTENT.md`（状态机 `src/game/slashIntent.ts`） |
@@ -78,7 +78,7 @@ npm run ios           # build + sync + 开 Xcode
 - 保留：adapt / create-renderer / haptics / plugins / `base`  
 - 触控：`clientToDesign` + 忽略 letterbox 外  
 - UI：只挂 `#ui-root`（进度条 + 调试面板）  
-- 音效：按 `docs/AUDIO.md`；禁止热路径 `new Audio()` / 每发一次桥  
+- 音效：`src/audio/gameAudio.ts` + `docs/AUDIO.md`；禁止热路径 `new Audio()` / 每发一次桥  
 
 ## 刻意不做
 

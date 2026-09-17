@@ -14,7 +14,7 @@ export type MeshSlashProgress = {
   chord: number;
   inside: boolean;
   enterEdge: number;
-  /** 锁 A 时的刀向（单位向量），夹缝沿这条轴，不跟刀尖转。 */
+  /** 锁 A 时的单位刀向。只给快滑藏缝用；夹缝绘制从 A 跟到刀尖。 */
   dirx: number;
   diry: number;
 };
@@ -43,7 +43,7 @@ export function emptyIntent(): SlashIntent {
   };
 }
 
-/** 本划已交刀的有向无限直线（网格切开成功后才写入）。 */
+/** 本划余势：刚切开的那条缝，只在「还顺着甩」时有效。 */
 export type ConsumedLine = {
   ox: number;
   oy: number;
@@ -58,13 +58,14 @@ export type SlashStroke = {
   slicedIds: Set<number>;
   progress: Map<number, MeshSlashProgress>;
   intent: SlashIntent;
-  /** 抬手前已消费的刀线。走廊内余势不再开新刀。 */
+  /** 本划余势。转走 / 离开走廊即清空，不必抬手。 */
   consumed: ConsumedLine[];
   /**
-   * 本刀入点，只写一次。progress 被清掉也要沿用，禁止按新朝向重锁。
-   * 切开成功 / 抬手才清空。
+   * 本刀入点，只写一次，绑当时那块 mesh。
+   * 同刀弯向不改 A；跟踪的 mesh 没了 / 切开成功 / 抬手才清。
    */
   enterLock: {
+    meshId: number;
     c0: DesignPoint;
     enterEdge: number;
     dirx: number;

@@ -1,5 +1,5 @@
 import type * as THREE from 'three';
-import { FLASH, INTENT, SLASH, START } from './design';
+import { FLASH, INTENT, START } from './design';
 import {
   chordLength,
   clipBackToEnter,
@@ -28,13 +28,7 @@ export type CutTarget = {
   enterEdge?: number;
 };
 
-export type IntentPhase =
-  | 'idle'
-  | 'arming'
-  | 'miss'
-  | 'track'
-  | 'aimed'
-  | 'hold';
+export type IntentPhase = 'idle' | 'arming' | 'track' | 'aimed' | 'hold';
 
 export type IntentFrame = {
   phase: IntentPhase;
@@ -49,7 +43,16 @@ export type IntentFrame = {
   earlyFlash: boolean;
   commit: CutTarget | null;
   commitFlash: boolean;
+  /** 本段未提交原因（调试）。提交成功为 commit。 */
+  why: string;
 };
+
+let debugWhy = '';
+
+function note(msg: string): null {
+  debugWhy = msg;
+  return null;
+}
 
 function hypot(dx: number, dy: number): number {
   return Math.hypot(dx, dy);
@@ -116,7 +119,7 @@ export function consumeCutLine(
   const dx = c1.x - c0.x;
   const dy = c1.y - c0.y;
   const len = hypot(dx, dy);
-  if (len < 1) return;
+  if (len < 1e-6) return;
   stroke.consumed.push({
     ox: c0.x,
     oy: c0.y,
@@ -143,28 +146,36 @@ function releaseConsumed(
   });
 }
 
-function occupying(stroke: SlashStroke, tip: DesignPoint): boolean {
-  const w = START.corridor;
-  return stroke.consumed.some((line) => distToConsumed(tip, line) <= w);
-}
-
-function edgeOnConsumed(
-  e0: DesignPoint,
-  e1: DesignPoint,
+function occupying(
   stroke: SlashStroke,
+  tip: DesignPoint,
+  from?: DesignPoint,
 ): boolean {
   const w = START.corridor;
-  return stroke.consumed.some(
-    (line) => distToConsumed(e0, line) <= w && distToConsumed(e1, line) <= w,
-  );
+  let ux = 0;
+  let uy = 0;
+  let hasDir = false;
+  if (from) {
+    const vx = tip.x - from.x;
+    const vy = tip.y - from.y;
+    const vl = hypot(vx, vy);
+    if (vl >= 1e-4) {
+      ux = vx / vl;
+      uy = vy / vl;
+      hasDir = true;
+    }
+  }
+  return stroke.consumed.some((line) => {
+    if (distToConsumed(tip, line) > w) return false;
+    if (!hasDir) return true;
+    return ux * line.dx + uy * line.dy > START.alongMin;
+  });
 }
 
-function chordOnConsumed(
-  c0: DesignPoint,
-  c1: DesignPoint,
-  stroke: SlashStroke,
-): boolean {
-  return edgeOnConsumed(c0, c1, stroke);
+/** 余势结束：转走或离开走廊。之后切开面也可当入边。 */
+function endFollowThrough(stroke: SlashStroke, tip: DesignPoint, from: DesignPoint): void {
+  if (!stroke.consumed.length) return;
+  if (!occupying(stroke, tip, from)) stroke.consumed = [];
 }
 
 function slashDeepEnough(
@@ -172,8 +183,7 @@ function slashDeepEnough(
   c1: DesignPoint,
   box: ProjBox,
 ): boolean {
-  const len = chordLength(c0, c1);
-  return len >= Math.max(SLASH.minChord, throughThreshold(box));
+  return chordLength(c0, c1) >= throughThreshold(box);
 }
 
 function speedBlend(speed: number): number {
@@ -211,6 +221,7 @@ function lockEnter(
 ): boolean {
   if (stroke.enterLock) {
     const L = stroke.enterLock;
+    if (L.meshId !== meshId) return false;
     stroke.progress.set(meshId, {
       c0: { x: L.c0.x, y: L.c0.y },
       c1: tip,
@@ -225,6 +236,7 @@ function lockEnter(
   if (chordLength(c0, tip) < START.lockSlop) return false;
   const d = unitDir(c0, tip);
   stroke.enterLock = {
+    meshId,
     c0: { x: c0.x, y: c0.y },
     enterEdge,
     dirx: d.dx,
@@ -247,7 +259,6 @@ function pickEnterByScore(
   slash: DesignPoint,
   hull: DesignPoint[],
   radius: number,
-  stroke: SlashStroke,
 ): { edge: number; point: DesignPoint } | null {
   const ranked = rankedHullEdges(press, hull);
   const sl = hypot(slash.x, slash.y) || 1;
@@ -260,7 +271,6 @@ function pickEnterByScore(
     if (!row || row.dist > radius) continue;
     const e0 = hull[i];
     const e1 = hull[(i + 1) % n];
-    if (edgeOnConsumed(e0, e1, stroke)) continue;
     const prox = 1 - row.dist / radius;
     const ex = e1.x - e0.x;
     const ey = e1.y - e0.y;
@@ -303,8 +313,9 @@ export function previewCutChord(
   camera: THREE.Camera,
   stroke: SlashStroke,
   tip: DesignPoint,
+  from?: DesignPoint,
 ): CutTarget | null {
-  if (occupying(stroke, tip)) return null;
+  if (occupying(stroke, tip, from)) return null;
   const trackedId = stroke.progress.size ? [...stroke.progress.keys()][0] : null;
   if (trackedId == null) return null;
   const st = stroke.progress.get(trackedId);
@@ -327,8 +338,8 @@ export function previewCutChord(
 function medianSpeed(stroke: SlashStroke, fallback: number): number {
   const s = stroke.intent.speedSamples;
   if (s.length === 0) return fallback;
-  const all = s.concat(fallback).sort((x, y) => x - y);
-  return all[Math.floor(all.length / 2)] ?? fallback;
+  const sorted = s.slice().sort((x, y) => x - y);
+  return sorted[Math.floor(sorted.length / 2)] ?? fallback;
 }
 
 export function crackAlongStroke(
@@ -378,10 +389,12 @@ export function resolveCutBySegment(
   dtSec: number,
 ): CutTarget | null {
   const [a, b] = seg;
-  if (chordLength(a, b) < 1e-4) return null;
+  debugWhy = '';
+  if (chordLength(a, b) < 1e-4) return note('微段太短');
 
   releaseConsumed(stroke, a, b);
-  if (occupying(stroke, b)) return null;
+  if (occupying(stroke, b, a)) return note('走廊余势（贴着上一刀）');
+  endFollowThrough(stroke, b, a);
 
   const live = meshes.filter(
     (m) => !stroke.slicedIds.has(m.id) && !skipIds.has(m.id),
@@ -394,12 +407,14 @@ export function resolveCutBySegment(
     const st = stroke.progress.get(trackedId);
     if (!mesh || !st) {
       stroke.progress.clear();
-      return null;
+      if (stroke.enterLock?.meshId === trackedId) stroke.enterLock = null;
+      return note('跟踪的板没了');
     }
     const proj = projectMeshHull(mesh, camera);
     if (!proj) {
       stroke.progress.clear();
-      return null;
+      if (stroke.enterLock?.meshId === trackedId) stroke.enterLock = null;
+      return note('凸包投影失败');
     }
     const clipped = clipChordToHull(a, b, proj.hull);
     if (clipped) {
@@ -409,27 +424,31 @@ export function resolveCutBySegment(
     const nowInside = pointInConvexHull(b, proj.hull);
     st.inside = nowInside;
     if (nowInside) {
-      const speed = pushSpeed(stroke, segmentSpeedPxPerSec(a, b, dtSec));
+      const speed = medianSpeed(stroke, segmentSpeedPxPerSec(a, b, dtSec));
       const need = endTravelNeed(speed);
-      if (need >= 0.999) return null;
+      if (need >= 0.999) return note('慢划须真出边（板内不补）');
       const line = clipInfiniteLineToHull(st.c0, b, proj.hull);
-      if (!line) return null;
+      if (!line) return note('青线打不出出点');
       const exit = line[1];
       const full = chordLength(st.c0, exit);
       const exitEdge = closestHullEdge(exit, proj.hull);
-      if (!twoEdges(st.enterEdge, exitEdge, st.c0, exit, proj.hull)) return null;
+      if (!twoEdges(st.enterEdge, exitEdge, st.c0, exit, proj.hull)) {
+        return note(`补切同边 e${st.enterEdge}→e${exitEdge}`);
+      }
       const ang = headingAngleDeg(
         b.x - a.x,
         b.y - a.y,
         exit.x - st.c0.x,
         exit.y - st.c0.y,
       );
-      if (ang > FLASH.aimAngle) return null;
+      if (ang > FLASH.aimAngle) return note(`未对准青线 ${ang.toFixed(0)}°`);
       const ratio = travelAlongCyan(st.c0, exit, b);
-      if (ratio < need) return null;
-      if (!slashDeepEnough(st.c0, exit, proj.box)) return null;
-      if (chordOnConsumed(st.c0, exit, stroke)) return null;
+      if (ratio < need) {
+        return note(`行程 ${(ratio * 100).toFixed(0)}% < ${(need * 100).toFixed(0)}%`);
+      }
+      if (!slashDeepEnough(st.c0, exit, proj.box)) return note('补切不够深');
       stroke.progress.delete(trackedId);
+      debugWhy = 'commit 板内补切';
       return {
         mesh,
         c0: st.c0,
@@ -462,15 +481,13 @@ export function resolveCutBySegment(
     }
     if (!twoEdges(st.enterEdge, exitEdge, c0, c1, proj.hull)) {
       /** 同边蹭 / 弯刀假出边：保住 A，不要按下一段方向重锁。 */
-      return null;
+      return note(`同边蹭 e${st.enterEdge}→e${exitEdge}`);
     }
     if (!slashDeepEnough(c0, c1, proj.box)) {
-      return null;
-    }
-    if (chordOnConsumed(c0, c1, stroke)) {
-      return null;
+      return note('出边不够深');
     }
     stroke.progress.delete(trackedId);
+    debugWhy = 'commit 真出边';
     return {
       mesh,
       c0,
@@ -501,11 +518,11 @@ export function resolveCutBySegment(
 
     if (!fromOutside && !outside) {
       const press = stroke.points[0] ?? a;
-      const speed = pushSpeed(stroke, segmentSpeedPxPerSec(a, b, dtSec));
+      const speed = medianSpeed(stroke, segmentSpeedPxPerSec(a, b, dtSec));
       const radius = startRadius(speed);
       const slash = { x: b.x - press.x, y: b.y - press.y };
       if (hypot(slash.x, slash.y) < START.lockSlop) continue;
-      const picked = pickEnterByScore(press, slash, proj.hull, radius, stroke);
+      const picked = pickEnterByScore(press, slash, proj.hull, radius);
       if (!picked) continue;
       lockEnter(stroke, mesh.id, picked.point, b, picked.edge);
       return null;
@@ -515,16 +532,9 @@ export function resolveCutBySegment(
     const c0 = clipped?.c0 ?? inf?.[0];
     if (!c0) continue;
     const c1 = clipped?.c1 ?? b;
-    const n = proj.hull.length;
     const enterEdge = clipped
       ? clipped.enterEdge
       : closestHullEdge(c0, proj.hull);
-    if (enterEdge >= 0) {
-      const e0 = proj.hull[enterEdge];
-      const e1 = proj.hull[(enterEdge + 1) % n];
-      if (edgeOnConsumed(e0, e1, stroke)) continue;
-    }
-    if (chordOnConsumed(c0, clipped?.c1 ?? b, stroke)) continue;
     const exitEdge = clipped ? clipped.exitEdge : -1;
     const chord = clipped ? chordLength(c0, c1) : 0;
 
@@ -535,14 +545,17 @@ export function resolveCutBySegment(
       twoEdges(enterEdge, exitEdge, c0, c1, proj.hull)
     ) {
       if (slashDeepEnough(c0, c1, proj.box)) {
+        debugWhy = 'commit 一段贯穿';
         return { mesh, c0, c1, chord, enterEdge };
       }
+      note('一段贯穿但不够深');
       continue;
     }
 
     lockEnter(stroke, mesh.id, c0, b, enterEdge);
-    return null;
+    return note('已锁 A，等出边');
   }
+  if (!debugWhy) note(stroke.armed ? '未入板' : '未出刃');
   return null;
 }
 
@@ -610,7 +623,10 @@ export function stepSlashIntent(
   dtSec: number,
 ): IntentFrame {
   const tip = seg[1];
-  const speed = segmentSpeedPxPerSec(seg[0], tip, dtSec);
+  const speed = pushSpeed(
+    stroke,
+    segmentSpeedPxPerSec(seg[0], tip, dtSec),
+  );
   const it = stroke.intent;
 
   releaseConsumed(stroke, seg[0], tip);
@@ -625,7 +641,7 @@ export function stepSlashIntent(
     dtSec,
   );
 
-  const cyan = previewCutChord(meshes, camera, stroke, tip);
+  const cyan = previewCutChord(meshes, camera, stroke, tip, seg[0]);
   const lockedChord = updateSlashIntent(stroke, cyan, seg, dtSec);
 
   let travelRatio = 0;
@@ -649,7 +665,7 @@ export function stepSlashIntent(
       else it.aimStable = 0;
       const aimed =
         it.aimStable >= FLASH.aimSegs &&
-        travelRatio >= endTravelNeed(pushSpeed(stroke, speed));
+        travelRatio >= endTravelNeed(speed);
       if (aimed) it.flashHot = true;
     } else {
       it.flashHot = false;
@@ -667,7 +683,7 @@ export function stepSlashIntent(
   const st = trackedId != null ? stroke.progress.get(trackedId) : undefined;
 
   let phase: IntentPhase = 'idle';
-  if (occupying(stroke, tip)) phase = 'hold';
+  if (occupying(stroke, tip, seg[0])) phase = 'hold';
   else if (it.locked) phase = 'aimed';
   else if (trackedId != null) phase = 'track';
   else if (stroke.armed) phase = 'arming';
@@ -685,5 +701,6 @@ export function stepSlashIntent(
     earlyFlash,
     commit,
     commitFlash,
+    why: debugWhy || (occupying(stroke, tip, seg[0]) ? '走廊余势（贴着上一刀）' : ''),
   };
 }

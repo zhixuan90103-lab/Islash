@@ -14,8 +14,8 @@
 | [docs/ENGINEERING.md](./docs/ENGINEERING.md) | 壳的设计决策与踩坑 |
 | [docs/ENTRYPOINTS.md](./docs/ENTRYPOINTS.md) | 入口与调用链 |
 | [docs/MERGE.md](./docs/MERGE.md) | 双工程合并说明 |
-| [docs/AUDIO.md](./docs/AUDIO.md) | 音效方案（未实现） |
-| [docs/HAPTICS.md](./docs/HAPTICS.md) | 震动接线（本玩法未接刀震） |
+| [docs/AUDIO.md](./docs/AUDIO.md) | 音效（已接 `gameAudio`；批处理为方案） |
+| [docs/HAPTICS.md](./docs/HAPTICS.md) | 震动接线（玩法走 `slashHaptics.ts`） |
 
 ## 30 秒上手
 

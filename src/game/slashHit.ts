@@ -269,7 +269,7 @@ export function silhouetteSide(p: DesignPoint, box: ProjBox): HullSide {
 export function throughThreshold(box: ProjBox): number {
   const w = box.maxX - box.minX;
   const h = box.maxY - box.minY;
-  return Math.max(4, SLASH.hullChordRatio * Math.min(w, h));
+  return Math.max(SLASH.minChord, SLASH.hullChordRatio * Math.min(w, h));
 }
 
 const _ndcHit = new THREE.Vector2();
