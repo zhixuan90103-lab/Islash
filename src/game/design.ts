@@ -1,8 +1,9 @@
 /**
  * 划切玩法设计数据。改这里即改规则，不要在各模块里再写魔法数。
  *
- * 滑动 = 刀；盒子 = 木头。
- * 刀向 A→B 决定砍飞方向；滑速决定力度。未完成前只踢被砍下的块。
+ * 滑动 = 刀；板 = 木头。
+ * 未完成：大块留下、小块飞出。完成切割：两块都飞。
+ * 刀向 A→B 决定砍飞方向；滑速决定力度。
  */
 
 /** 木头设计形体（世界单位）。参数为 1 时按此尺寸建几何，不是正方体。 */
@@ -76,6 +77,17 @@ export function boardCutProgress(
 
 export const CUT_DEFAULT = { ...CUT };
 
+/**
+ * 图库（依次循环）。scale 为相对 `woodSize()` 面积的**线度**。
+ * 长六边不跟面积对齐，用 `hexDiamondProfile` 世界尺寸。
+ */
+export const BOARDS = {
+  circleScale: 0.81,
+  squareScale: 0.8,
+};
+
+export const BOARDS_DEFAULT = { ...BOARDS };
+
 /** 完成切割演出：先顿 → 慢放飞出 → 镜头/时间回 rest。 */
 export const FINALE = {
   /** 顿帧（秒），只冻这一刀两块。 */
@@ -100,7 +112,7 @@ export const FINALE_DEFAULT = { ...FINALE };
 export const VIEW = {
   fov: 45,
   cameraZ: 6.2,
-  /** 参考作水色：中心亮青、四周偏蓝。 */
+  /** letterbox / 场景底色（红色青海波背景）。 */
   bg: 0xc44a3a,
   bgCenter: 0xe07058,
   bgEdge: 0x5c1814,
@@ -340,3 +352,27 @@ export function bladeSpeedScale(speedPxPerSec: number): number {
   const v = Math.max(PHYS.minSliceSpeed, speedPxPerSec);
   return Math.min(1, v / PHYS.speedRef);
 }
+
+/**
+ * 刀的触觉（Taptic，不是震屏）。
+ * 锁 A：轻瞬态 + 弱持续（渐起，最长 maxHold）。
+ * 切开成功：停持续 → 更强更锐的瞬态。失败 / 抬手 / 走廊余势：只停，不打结束击。
+ */
+export const HAPTIC = {
+  enterI: 0.3,
+  enterS: 0.24,
+  holdI: 0.16,
+  holdS: 0.6,
+  /** 持续渐起（秒）。 */
+  attack: 0.15,
+  /** 硬上限（秒）。到点自动停，不拖到插件 30s 帽。 */
+  maxHold: 2,
+  cutI0: 0.45,
+  cutI1: 0.74,
+  cutS0: 0.42,
+  cutS1: 0.72,
+  /** 完成切割时切开瞬态强度倍率。 */
+  finishMul: 1.2,
+};
+
+export const HAPTIC_DEFAULT = { ...HAPTIC };

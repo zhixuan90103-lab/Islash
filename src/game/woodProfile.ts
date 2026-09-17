@@ -1,3 +1,5 @@
+import { BOARDS } from './design';
+
 export type Poly2 = { x: number; y: number };
 
 function polyBBox(poly: Poly2[]): { w: number; h: number } {
@@ -73,12 +75,21 @@ function hexDiamondProfile(): Poly2[] {
 }
 
 /**
- * 当前图库：长六边、圆。面积在 spawn 时对齐。
+ * 图库依次：长六边 → 圆 → 正方形。
+ * matchArea 的块按 `woodSize()` 面积 × 线度² 缩放。
  */
 const BOARD_SHAPES: { make: () => Poly2[]; matchArea: boolean; areaScale: number }[] = [
   { make: () => hexDiamondProfile(), matchArea: false, areaScale: 1 },
-  { make: () => regularPoly(48, 1.05, 1.05), matchArea: true, areaScale: 0.81 * 0.81 },
-  { make: () => rectProfile(1.4, 1.4), matchArea: true, areaScale: 0.8 * 0.8 },
+  {
+    make: () => regularPoly(48, 1.05, 1.05),
+    matchArea: true,
+    areaScale: BOARDS.circleScale * BOARDS.circleScale,
+  },
+  {
+    make: () => rectProfile(1.4, 1.4),
+    matchArea: true,
+    areaScale: BOARDS.squareScale * BOARDS.squareScale,
+  },
 ];
 
 export function catalogBoardProfile(

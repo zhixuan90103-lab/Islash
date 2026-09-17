@@ -8,7 +8,7 @@
 
 **TypeScript + Three.js WebGPU + Vite + Capacitor iOS** 竖屏。  
 设计空间 **390×844** contain letterbox；`base: './'`。  
-滑动=刀，板=木头；划穿 1 变 2，大块留下，小块按刀向飞出。
+滑动=刀，板=木头；划穿 1 变 2，大块留下，小块按刀向飞出。体积低于 1/10 完成切割，两块都飞，进度条满后换下一板。
 
 ## 入口地图
 
@@ -29,7 +29,9 @@
 | 划切规范 | `docs/SLASH-DESIGN.md`（参数 `src/game/design.ts`） |
 | 打击感 | `docs/SLASH-FEEL.md`（`SHAKE` `FX` `TRAIL`；`screenShake.ts`） |
 | 意图识别 | `docs/SLASH-INTENT.md`（状态机 `src/game/slashIntent.ts`） |
-| 水色背景 | `src/game/backdrop.ts` |
+| 关卡背景 + 投影 | `src/game/backdrop.ts`（贴图 `src/assets/bg-dojo.jpg`） |
+| 灯光 | `src/game/lights.ts`（参数 `LIGHT`） |
+| 进度条 | `src/game/cutProgressHud.ts` |
 | 划切调研 | `docs/SLASH-RESEARCH.md` |
 | 连续切技术 | `docs/SLASH-TECH.md` |
 
@@ -75,7 +77,7 @@ npm run ios           # build + sync + 开 Xcode
 - 玩法：`src/game/`；规则：[docs/SLASH-DESIGN.md](docs/SLASH-DESIGN.md)；意图：[docs/SLASH-INTENT.md](docs/SLASH-INTENT.md)；打击感：[docs/SLASH-FEEL.md](docs/SLASH-FEEL.md)（帮助只管 A 与青线终点；切开成功才消费该有向直线，走廊内余势不再出刀）  
 - 保留：adapt / create-renderer / haptics / plugins / `base`  
 - 触控：`clientToDesign` + 忽略 letterbox 外  
-- UI：只挂 `#ui-root`（调试面板已在此）  
+- UI：只挂 `#ui-root`（进度条 + 调试面板）  
 - 音效：按 `docs/AUDIO.md`；禁止热路径 `new Audio()` / 每发一次桥  
 
 ## 刻意不做

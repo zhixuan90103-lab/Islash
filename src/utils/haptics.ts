@@ -41,6 +41,7 @@ type AdvancedHapticsPlugin = {
     intensity: number;
     sharpness: number;
     duration?: number;
+    attack?: number;
   }): Promise<void>;
   stopContinuousHaptic(): Promise<void>;
   setKeepAwake(opts: { enabled: boolean }): Promise<{ enabled: boolean }>;
@@ -197,6 +198,7 @@ export const haptics = {
     intensity: number;
     sharpness: number;
     duration?: number;
+    attack?: number;
   }): Promise<{ ok: boolean; reason?: string }> {
     if (!enabled) return { ok: false, reason: 'disabled' };
     if (!pluginReady()) return { ok: false, reason: 'not_native_ios' };
@@ -205,6 +207,7 @@ export const haptics = {
         intensity: clamp01(opts.intensity),
         sharpness: clamp01(opts.sharpness),
         duration: opts.duration,
+        attack: opts.attack,
       }),
     );
   },

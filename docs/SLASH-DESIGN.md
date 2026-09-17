@@ -9,7 +9,7 @@
 
 ## 一句话
 
-滑动 = 刀；板 = 木头。划穿后 1 变 2：大块留下静止，小块被踢飞。较大块体积低于整板 `CUT.finishRemain`（默认 1/10）时为完成切割，两块都沿刀向飞出。无地面、无关卡、无分数。
+滑动 = 刀；板 = 木头。划穿后 1 变 2：大块留下静止，小块被踢飞。较大块体积低于整板 `CUT.finishRemain`（默认 1/10）时为完成切割，两块都沿刀向飞出。图库三块循环进场。无地面、无关卡、无分数。
 
 ## 规则
 
@@ -21,8 +21,9 @@
 6. **刀向**：入点→出点（设计坐标投到板面 XY）。冲量用法线 `Cross(刀向, 相机朝向)`，退化时 `camera.up`。
 7. **未完成时只踢被砍下的块**。留下的块不位移、不给冲量、不做体积质心平移。
 7b. **完成切割**：切开后较大块体积 `< originVolume * CUT.finishRemain`（默认 0.1）。该刀两块都变 dynamic，各自按刀向 + 相对法线踢飞，不再留下 static。演出：先顿 → 慢放飞出 → 镜头/时间恢复，见 [SLASH-FEEL.md](./SLASH-FEEL.md)「最后一刀」。
-7c. **进度**：相对能砍额度 `origin * (1 - finishRemain)`。未完成 `进度 = (origin - keep) / 额度`；完成切割钳到 100%。条挂 `#ui-root` 顶。飞出后再等 `CUT.nextDelay` 刷下一块。当前图库依次：长六边菱形 → 圆（48 边） → 正方形（整体 80%）→ 循环。包进 `boardMaxW×boardMaxH`。新板进度清零。
+7c. **进度**：相对能砍额度 `origin * (1 - finishRemain)`。未完成 `进度 = (origin - keep) / 额度`；完成切割钳到 100%。条挂 `#ui-root` 顶，无标题文字。飞出后再等 `CUT.nextDelay` 刷下一块，进度清零。
 7d. **进场**：新板从画面上方滑入到中心（`CUT.enterDur`，ease-out）后停下。不持续下落、不出下边。
+7e. **图库**（`BOARDS`，依次循环，连续不重复靠顺序）：长六边菱形（自有世界尺寸，不对齐面积）→ 圆 48 边（线度 `circleScale` 0.81）→ 正方形（线度 `squareScale` 0.8）。包进 `CUT.boardMaxW×boardMaxH`。
 8. **飞出块**绕体积质心。质量/惯量 = Rapier 密度 × 碰撞体。无地面。
 9. **不伪造**「重的一侧向下」的额外力矩。
 10. **触控**走 `clientToDesign`；letterbox 外忽略。调试面板 `stopPropagation`，不抢刀。
@@ -59,7 +60,7 @@
 | 锐角 | 宽 d 的两条倒角带在尖楔里会相交。该角 miter 落在别的半平面外 → **丢掉这个内顶点**，外轮廓短边收到内沿上。切边仍是原直边挤出。 |
 | 封口 | 底、顶、每条竖直侧面、倒角带、尖角补面都要有。内沿两端几乎重合时**仍要补面**（收到一点），不能当成已经接好。 |
 | 整块没棱 | 仅当 `inset ≥ 轮廓最小高`，或裁完剩下不足 3 条内边（比倒角还瘦的碎片）。 |
-| 法线 | 每个三角形自己的面法线；材质 `flatShading`。单面绘制。 |
+| 法线 | 每个三角形自己的面法线。材质 Lambert 漫反射（无镜面）。单面绘制。 |
 
 文件：`woodProfile.ts`（轮廓/切开）、`woodChamfer.ts`（内收计划 + 挤出）、`wood.ts`（生成/重置）。
 
@@ -86,24 +87,44 @@
 
 - `WOOD_SHAPE`：设计形体 **0.7 × 2 × 0.075**（板，不是正方体）。
 - `WOOD_SHAPE.frontInset`：正面倒角宽度，默认 **0.028**（XY 与 Z 相同）。锐角靠半平面裁掉内顶点，不另设 miter 上限。
-- `WOOD.width/height/depth`：乘数，当前默认 **1.5 / 1.5 / 1**（实际约 **1.05 × 3.0 × 0.075**）。
-- `WOOD.lift`：相对画面中心的 Y。
+- `WOOD.width/height/depth`：乘数，当前默认 **1.75 / 1.75 / 1**（面积目标约 **1.225 × 3.5**）。
+- `WOOD.lift`：进场结束后的中心 Y。
+- `WOOD.uvScale`：木纹世界 XY 投影，默认 **0.3**（整板落在一张纹内，避免 Repeat 接缝）。
+- `WOOD.faceColor`：正面漫反射乘色，默认 `#fff3e4`。
 - 实际边长：`woodSize()` = SHAPE × 乘数。改乘数后调试面板会重建板。
 
-## 外观（`VIEW`）
+## 外观
 
-水色背景 + 暖橙木，方便看倒角。相机 `(0, 0, cameraZ)` 看原点。
+相机 `(0, 0, cameraZ)` 看原点。背景是贴图板 + 投影层，不是程序水色。
+
+### 背景与投影
+
+| 项 | 位置 / 默认 | 说明 |
+|----|-------------|------|
+| 贴图 | `src/assets/bg-dojo.jpg` | 红色青海波；`MeshBasicMaterial` 不吃光 |
+| 接影 | `ShadowMaterial`，`VIEW.bgZ` **-0.28** | 木板 `castShadow`，影子落在板后 |
+| `VIEW.shadowOpacity` | 0.38 | 影子浓度 |
+| `VIEW.bgEdge` | `#5c1814` | `scene.background` / letterbox |
+| CSS | `--stage-bg` `#c44a3a`、`--shell-bg` `#4a1512` | 与红底对齐 |
+
+### 木头材质（未上漆 = Lambert）
+
+官方：`MeshLambertMaterial` 用于 untreated wood，无镜面。正面 / 倒角两套材质 + 同一张四方连续木纹 `src/assets/wood-grain.jpg`。UV 用世界 XY。倒角略深（`VIEW.woodChamfer` `#e8c49a`）只为看出厚度。板面看起来比 jpg 深，是因为漫反射 × 灯光 × NeutralToneMapping，不是贴图坏了。
+
+### 灯光（`LIGHT`，调试面板「灯光」）
 
 | 键 | 默认 | 作用 |
 |----|------|------|
+| keyIntensity / fillIntensity / hemiIntensity | 3.6 / 0 / 1.4 | 主光 / 补光 / 环境 |
+| keyYaw / keyPitch / keyDist | -13° / 44° / 6.9 | 主光方位（yaw 0=镜头，pitch 90=正上） |
+| VIEW.hemiSky / hemiGround | `#fff6ea` / `#8a5a40` | 半球颜色 |
 | fov / cameraZ | 45 / 6.2 | 透视 |
-| bg / bgCenter / bgEdge | `#2eb5e0` / `#6ad4f0` / `#0d6e9c` | 径向水色；`backdrop.ts` 再画同心圆 |
-| woodColor | `#d4893a` | 木板 |
-| hemiSky / hemiGround | `#fff6ea` / `#8a5a40` | 半球光颜色 |
-| LIGHT.keyIntensity / fill / hemi | 3.6 / 0 / 1.4 | 主光 / 补光 / 环境强度 |
-| LIGHT.keyYaw / keyPitch / keyDist | -13° / 44° / 6.9 | 主光方位（调试面板可调） |
 
-CSS `--stage-bg` / `--shell-bg` 与水色对齐，letterbox 不要再是暗海军蓝。
+实现：`lights.ts` `mountGameLights` / `applyGameLights`。
+
+### HUD
+
+`#ui-root` 只挂进度条（`cutProgressHud.ts`）和调试按钮。无标题、无状态文案。
 
 ## 砍飞（冲量）
 
@@ -158,14 +179,16 @@ J = mass * targetSpeed
 | 文件 | 职责 |
 |------|------|
 | `design.ts` | 全部可调参数 |
-| `backdrop.ts` | 水色径向背景贴 `scene.background` |
+| `backdrop.ts` | 关卡背景贴图 + 接影板 |
+| `lights.ts` | 主光 / 补光 / 半球；读 `LIGHT` |
+| `cutProgressHud.ts` | `#ui-root` 顶进度条 |
 | `slashInput.ts` | 指针折线、出刃、滑速；本划 `consumed[]` |
 | `slashHit.ts` | 轮廓、射线、点在凸包 |
 | `slashIntent.ts` | 意图：锁 A、补切、消费走廊、夹缝/青线、提前刀光 |
 | `slashCut.ts` | 板面 XY 上切轮廓，重建两块网格 |
 | `bladeForce.ts` | 冲量合成、质量归一、夹速度；体积用轮廓面积 |
 | `slashPhysics.ts` | Rapier；仅飞出块做体积质心；留下块 fixed |
-| `woodProfile.ts` | 2D 轮廓、切开、清理 |
+| `woodProfile.ts` | 2D 轮廓、切开、图库 |
 | `woodChamfer.ts` | 半平面内收计划 + 封闭挤出网格 |
 | `wood.ts` | 生成/重置、meshFromProfile |
 | `slashWorld.ts` | 会话编排、每刀顿帧、解冻冲量 |
@@ -176,7 +199,7 @@ J = mass * targetSpeed
 
 ## 调试面板
 
-挂在 `#ui-root`。**默认收起**，只留「调试参数」按钮。点控件不触发划切。长宽高输入的是 **WOOD 乘数**，旁边显示 `WOOD_SHAPE × 乘数` 的实际世界尺寸。
+挂在 `#ui-root`。**默认收起**，只留「调试参数」按钮。点控件不触发划切。长宽高输入的是 **WOOD 乘数**。灯光滑条改 `LIGHT` 并立刻 `applyGameLights`。
 
 ## iOS 包
 
@@ -190,4 +213,4 @@ J = mass * targetSpeed
 
 ## 刻意不做
 
-关卡、胜负、分数、连击、主题皮、其它手势族、Android、WebGL 回退、伪造重侧下垂力矩、参考作的 HUD/红鼓、整板锥台、3D CSG 切倒角网格、整块缩小 inset 当倒角失败兜底。
+关卡胜负、分数、连击、其它手势族、Android、WebGL 回退、伪造重侧下垂力矩、参考作红鼓/忍者星、整板锥台、3D CSG 切倒角网格、整块缩小 inset 当倒角失败兜底、Standard/Phong 木头（会出镜面）。

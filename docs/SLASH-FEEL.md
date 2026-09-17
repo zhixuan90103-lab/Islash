@@ -4,11 +4,11 @@
 编排：`src/game/slashWorld.ts`。震屏：`src/game/screenShake.ts`。碎屑/闪：`src/game/slashDebug.ts` overlay。  
 玩法总则：[SLASH-DESIGN.md](./SLASH-DESIGN.md)。划痕调研：[SLASH-TRAIL.md](./SLASH-TRAIL.md)。
 
-本文是**当前已落地规则**。音效与原生马达玩法层仍未接（方案见 [AUDIO.md](./AUDIO.md)、[HAPTICS.md](./HAPTICS.md)）。
+本文是**当前已落地规则**。音效仍未接（[AUDIO.md](./AUDIO.md)）。马达触觉见下文「刀的触觉」；接线仍走 [HAPTICS.md](./HAPTICS.md)。
 
 ## 原则
 
-1. **只在网格切开成功时**上打击感（顿帧、碎屑、闪、踢屏、解冻加踢）。划空、夹缝、提前刀光不震、不顿。
+1. **视觉打击感只在网格切开成功时**（顿帧、碎屑、闪、踢屏、解冻加踢）。划空、夹缝、提前刀光不顿、不踢屏。马达：锁 A 轻击 + 弱持续；切开成功才打结束重击。
 2. **力度共用 `hit`**：滑速 × 掉块大小，有保底、有上限。连砍可叠，但封顶。
 3. **顿帧只冻这一刀新切开的块**。已飞出的块继续物理（卡普空 hitstop：只停当事双方）。
 4. **震屏只改渲染相机**。玩法、触控、切缝投影用 rest 相机（`applyView` 前、`restoreView` 后）。
@@ -23,6 +23,23 @@ hit    = clamp(speedK * sizeK, SHAKE.floor, 1)
 ```
 
 慢且小 → 接近 `floor`（0.08）。快且接近对半 → 1。
+
+## 刀的触觉（Taptic，不是震屏）
+
+参数：`HAPTIC`（`src/game/design.ts`）。编排：`src/game/slashHaptics.ts`。
+
+```
+锁 A（progress.c0 / 真入边）
+  → Transient 轻（enterI / enterS）
+  → Continuous 弱（holdI / holdS），attack 渐起，最长 maxHold
+切开成功
+  → 停持续（原生约 50ms 淡出）
+  → Transient 更强更锐，强度随 bladeSpeedScale；完成切割再乘 finishMul
+失败 / 抬手 / 走廊余势 / 同边蹭
+  → 只停持续，不打结束击
+从未锁 A
+  → 全程不震
+```
 
 ## 时间轴（一刀）
 

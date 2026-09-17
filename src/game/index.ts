@@ -14,5 +14,7 @@ export {
   CUT,
   FINALE,
   LIGHT,
+  BOARDS,
+  HAPTIC,
   boardCutProgress,
 } from './design';

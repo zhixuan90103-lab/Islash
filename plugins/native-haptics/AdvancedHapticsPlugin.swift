@@ -242,6 +242,7 @@ public class AdvancedHapticsPlugin: CAPPlugin, CAPBridgedPlugin {
         let intensity = call.getFloat("intensity") ?? 0.25
         let sharpness = call.getFloat("sharpness") ?? 0.3
         let duration = call.getDouble("duration") ?? 30.0
+        let attack = max(0, call.getDouble("attack") ?? 0)
 
         guard CHHapticEngine.capabilitiesForHardware().supportsHaptics else {
             call.reject("Haptics not supported")
@@ -260,7 +261,21 @@ public class AdvancedHapticsPlugin: CAPPlugin, CAPBridgedPlugin {
                 relativeTime: 0,
                 duration: duration
             )
-            let pattern = try CHHapticPattern(events: [event], parameters: [])
+            var curves: [CHHapticParameterCurve] = []
+            if attack > 0.001 {
+                let rise = min(attack, max(0.001, duration * 0.9))
+                curves.append(
+                    CHHapticParameterCurve(
+                        parameterID: .hapticIntensityControl,
+                        controlPoints: [
+                            CHHapticParameterCurve.ControlPoint(relativeTime: 0, value: 0),
+                            CHHapticParameterCurve.ControlPoint(relativeTime: rise, value: 1)
+                        ],
+                        relativeTime: 0
+                    )
+                )
+            }
+            let pattern = try CHHapticPattern(events: [event], parameterCurves: curves)
             let player = try engine?.makeAdvancedPlayer(with: pattern)
             try player?.start(atTime: CHHapticTimeImmediate)
             continuousPlayer = player

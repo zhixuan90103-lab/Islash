@@ -22,6 +22,7 @@ import {
 } from './slashInput';
 import { createSlashPhysics } from './slashPhysics';
 import { createWoodSet } from './wood';
+import { createSlashHaptics } from './slashHaptics';
 import type { StageLayout } from '../adapt/design';
 
 export type SlashSession = {
@@ -45,6 +46,7 @@ export async function mountSlashWorld(
   const physics = await createSlashPhysics();
   const overlay = createSlashOverlay(stage);
   const shake = createScreenShake(camera);
+  const bladeHaptics = createSlashHaptics();
   const wood = createWoodSet(scene, physics);
   wood.spawn();
   let enter: { from: number; to: number; t: number } | null = null;
@@ -259,6 +261,7 @@ export async function mountSlashWorld(
     overlay.freezeFlash();
     if (!finish && commitFlash) overlay.flash(commit.c0, commit.c1, false);
     hud.set(boardCutProgress(originVol, keepVol, finish));
+    bladeHaptics.onCut(speedPx, finish);
     report(finish ? '完成切割' : '已切开');
     return true;
   };
@@ -305,7 +308,7 @@ export async function mountSlashWorld(
       if (frame.crack) overlay.setCrack(frame.crack.c0, frame.crack.c1);
       else overlay.setCrack(null);
       if (frame.commit) {
-        applyCommit(
+        const ok = applyCommit(
           stroke,
           lastSeg,
           dtSec,
@@ -313,9 +316,13 @@ export async function mountSlashWorld(
           frame.commitFlash,
           frame.crack,
         );
-      } else if (frame.earlyFlash) {
-        const chord = frame.crack ?? frame.cyan;
-        if (chord) overlay.flash(chord.c0, chord.c1, true);
+        if (!ok) bladeHaptics.cancel();
+      } else {
+        bladeHaptics.onFrame(frame);
+        if (frame.earlyFlash) {
+          const chord = frame.crack ?? frame.cyan;
+          if (chord) overlay.flash(chord.c0, chord.c1, true);
+        }
       }
       overlay.setPreview(null);
       overlay.setIntentDebug({
@@ -330,6 +337,7 @@ export async function mountSlashWorld(
       });
     },
     onEnd: (stroke) => {
+      bladeHaptics.cancel();
       if (stroke && stroke.slicedIds.size === 0) {
         report('划过但未贯穿木板');
       }
@@ -384,6 +392,7 @@ export async function mountSlashWorld(
     applyView: () => shake.applyView(),
     restoreView: () => shake.restoreView(),
     dispose: () => {
+      bladeHaptics.cancel();
       input.dispose();
       panel.dispose();
       hud.dispose();
