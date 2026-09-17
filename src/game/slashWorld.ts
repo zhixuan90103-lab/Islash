@@ -53,11 +53,16 @@ export async function mountSlashWorld(
   const bladeHaptics = createSlashHaptics();
   const wood = createWoodSet(scene, physics);
   wood.spawn();
-  let enter: { from: number; to: number; t: number } | null = null;
+  let enter: {
+    from: number;
+    to: number;
+    t: number;
+    meshId: number | null;
+  } | null = null;
   const beginEnter = () => {
     const mesh = wood.cuttables[0];
     enter = mesh
-      ? { from: mesh.position.y, to: WOOD.lift, t: 0 }
+      ? { from: mesh.position.y, to: WOOD.lift, t: 0, meshId: mesh.id }
       : null;
   };
   beginEnter();
@@ -280,6 +285,8 @@ export async function mountSlashWorld(
       pieces.keep.id,
       pieces.drop.id,
     );
+    if (finish) enter = null;
+    else if (enter) enter.meshId = pieces.keep.id;
     const crack2 =
       crackAlongStroke(
         wood.cuttables,
@@ -443,6 +450,7 @@ export async function mountSlashWorld(
         const u = 1 - (1 - enter.t) ** 3;
         const y = enter.from + (enter.to - enter.from) * u;
         for (const mesh of wood.cuttables) {
+          if (enter.meshId != null && mesh.id !== enter.meshId) continue;
           const rec = physics.bodies.find((b) => b.mesh === mesh);
           if (!rec) continue;
           const t = rec.body.translation();
