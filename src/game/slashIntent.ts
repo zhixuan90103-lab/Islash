@@ -25,6 +25,7 @@ export type CutTarget = {
   c0: DesignPoint;
   c1: DesignPoint;
   chord: number;
+  enterEdge?: number;
 };
 
 export type IntentPhase =
@@ -64,6 +65,13 @@ export function headingAngleDeg(
   const bl = hypot(bx, by) || 1;
   const d = Math.max(-1, Math.min(1, (ax * bx + ay * by) / (al * bl)));
   return (Math.acos(d) * 180) / Math.PI;
+}
+
+function unitDir(from: DesignPoint, to: DesignPoint): { dx: number; dy: number } {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const len = hypot(dx, dy) || 1;
+  return { dx: dx / len, dy: dy / len };
 }
 
 export function resetLock(stroke: SlashStroke): void {
@@ -264,12 +272,20 @@ export function previewCutChord(
   return { mesh, c0, c1, chord: chordLength(c0, c1) };
 }
 
+function medianSpeed(stroke: SlashStroke, fallback: number): number {
+  const s = stroke.intent.speedSamples;
+  if (s.length === 0) return fallback;
+  const all = s.concat(fallback).sort((x, y) => x - y);
+  return all[Math.floor(all.length / 2)] ?? fallback;
+}
+
 export function crackAlongStroke(
   meshes: THREE.Mesh[],
   camera: THREE.Camera,
   stroke: SlashStroke,
   tip: DesignPoint,
   from?: DesignPoint,
+  speed = 0,
 ): { c0: DesignPoint; c1: DesignPoint } | null {
   const trackedId = stroke.progress.size ? [...stroke.progress.keys()][0] : null;
   if (trackedId != null) {
@@ -278,9 +294,30 @@ export function crackAlongStroke(
     if (st && mesh) {
       const proj = projectMeshHull(mesh, camera);
       if (proj) {
-        const hit = clipBackToEnter(st.c0, tip, proj.hull);
-        if (hit && chordLength(hit.c0, hit.c1) >= 1) {
-          return { c0: hit.c0, c1: hit.c1 };
+        if (!pointInConvexHull(tip, proj.hull)) return null;
+        /**
+         * 慢滑：A→刀尖，转角跟着变。
+         * 快滑且离开锁 A 刀轴：藏缝，避免画圈时缝乱晃。
+         */
+        const fast = medianSpeed(stroke, speed) >= FLASH.crackHoldSpeed;
+        if (fast) {
+          let dx = st.dirx;
+          let dy = st.diry;
+          if (dx * dx + dy * dy < 1e-8) {
+            const d = unitDir(st.c0, tip);
+            dx = d.dx;
+            dy = d.dy;
+          }
+          const lat = Math.abs(
+            (tip.x - st.c0.x) * dy - (tip.y - st.c0.y) * dx,
+          );
+          if (lat > FLASH.crackLeave) return null;
+        }
+        const hit =
+          clipChordToHull(st.c0, tip, proj.hull) ??
+          clipBackToEnter(st.c0, tip, proj.hull);
+        if (hit && chordLength(st.c0, hit.c1) >= 1) {
+          return { c0: st.c0, c1: hit.c1 };
         }
       }
     }
@@ -367,30 +404,48 @@ export function resolveCutBySegment(
         c0: st.c0,
         c1: exit,
         chord: Math.max(st.chord, full),
+        enterEdge: st.enterEdge,
       };
     }
 
-    const exitEdge = clipped
+    /**
+     * 真出边：微段可能跳过凸包（插值稀）。微段裁不到时用 A→刀尖无限直线出点。
+     * 同边蹭仍丢掉跟踪；对边且够深则提交。
+     */
+    let c0 = st.c0;
+    let c1 = clipped?.c1 ?? st.c1;
+    let exitEdge = clipped
       ? clipped.exitEdge
-      : closestHullEdge(st.c1, proj.hull);
-    if (!twoEdges(st.enterEdge, exitEdge, st.c0, st.c1, proj.hull)) {
-      stroke.progress.delete(trackedId);
+      : closestHullEdge(c1, proj.hull);
+    const microOk =
+      !!clipped &&
+      twoEdges(st.enterEdge, exitEdge, c0, c1, proj.hull) &&
+      slashDeepEnough(c0, c1, proj.box);
+    if (!microOk) {
+      const line = clipInfiniteLineToHull(st.c0, b, proj.hull);
+      if (line) {
+        c0 = st.c0;
+        c1 = line[1];
+        exitEdge = closestHullEdge(c1, proj.hull);
+      }
+    }
+    if (!twoEdges(st.enterEdge, exitEdge, c0, c1, proj.hull)) {
+      /** 同边蹭 / 弯刀假出边：保住 A，不要按下一段方向重锁。 */
       return null;
     }
-    if (!slashDeepEnough(st.c0, st.c1, proj.box)) {
-      stroke.progress.delete(trackedId);
+    if (!slashDeepEnough(c0, c1, proj.box)) {
       return null;
     }
-    if (chordOnConsumed(st.c0, st.c1, stroke)) {
-      stroke.progress.delete(trackedId);
+    if (chordOnConsumed(c0, c1, stroke)) {
       return null;
     }
     stroke.progress.delete(trackedId);
     return {
       mesh,
-      c0: st.c0,
-      c1: st.c1,
-      chord: st.chord,
+      c0,
+      c1,
+      chord: Math.max(st.chord, chordLength(c0, c1)),
+      enterEdge: st.enterEdge,
     };
   }
 
@@ -408,15 +463,52 @@ export function resolveCutBySegment(
       const speed = pushSpeed(stroke, segmentSpeedPxPerSec(a, b, dtSec));
       const radius = startRadius(speed);
       const slash = { x: b.x - press.x, y: b.y - press.y };
-      if (hypot(slash.x, slash.y) < 6) continue;
-      const picked = pickEnterByScore(press, slash, proj.hull, radius, stroke);
-      if (!picked) continue;
+      if (hypot(slash.x, slash.y) >= 6) {
+        const picked = pickEnterByScore(press, slash, proj.hull, radius, stroke);
+        if (picked) {
+          const d = unitDir(picked.point, b);
+          stroke.progress.set(mesh.id, {
+            c0: picked.point,
+            c1: b,
+            chord: chordLength(picked.point, b),
+            inside: true,
+            enterEdge: picked.edge,
+            dirx: d.dx,
+            diry: d.dy,
+          });
+          return null;
+        }
+      }
+      /**
+       * 板心按下仍不记刀。本划曾经在板外、跟踪又丢了：沿当前刀向回投锁 A。
+       */
+      const cameFromOutside = stroke.points.some(
+        (p) => !pointInConvexHull(p, proj.hull),
+      );
+      if (!cameFromOutside) continue;
+      const vx = b.x - a.x;
+      const vy = b.y - a.y;
+      const vl = hypot(vx, vy);
+      if (vl < 1) continue;
+      const back = {
+        x: b.x - (vx / vl) * 800,
+        y: b.y - (vy / vl) * 800,
+      };
+      const hit = clipBackToEnter(back, b, proj.hull);
+      if (!hit) continue;
+      const n = proj.hull.length;
+      const e0 = proj.hull[hit.enterEdge];
+      const e1 = proj.hull[(hit.enterEdge + 1) % n];
+      if (edgeOnConsumed(e0, e1, stroke)) continue;
+      const d = unitDir(hit.c0, b);
       stroke.progress.set(mesh.id, {
-        c0: picked.point,
+        c0: hit.c0,
         c1: b,
-        chord: chordLength(picked.point, b),
+        chord: chordLength(hit.c0, b),
         inside: true,
-        enterEdge: picked.edge,
+        enterEdge: hit.enterEdge,
+        dirx: d.dx,
+        diry: d.dy,
       });
       return null;
     }
@@ -445,17 +537,20 @@ export function resolveCutBySegment(
       twoEdges(enterEdge, exitEdge, c0, c1, proj.hull)
     ) {
       if (slashDeepEnough(c0, c1, proj.box)) {
-        return { mesh, c0, c1, chord };
+        return { mesh, c0, c1, chord, enterEdge };
       }
       continue;
     }
 
+    const d = unitDir(c0, c1.x === c0.x && c1.y === c0.y ? b : c1);
     stroke.progress.set(mesh.id, {
       c0,
       c1,
       chord,
       inside: true,
       enterEdge,
+      dirx: d.dx,
+      diry: d.dy,
     });
     return null;
   }
@@ -531,7 +626,7 @@ export function stepSlashIntent(
 
   releaseConsumed(stroke, seg[0], tip);
 
-  const crack = crackAlongStroke(meshes, camera, stroke, tip, seg[0]);
+  const crack = crackAlongStroke(meshes, camera, stroke, tip, seg[0], speed);
   const commit = resolveCutBySegment(
     meshes,
     camera,

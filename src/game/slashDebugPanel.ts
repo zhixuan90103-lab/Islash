@@ -141,6 +141,9 @@ const FLASH_SLIDERS: SliderSpec[] = [
   { key: 'overshoot', label: '甩出px', min: 0, max: 80, step: 1 },
   { key: 'overshootRatio', label: '甩出比例', min: 0, max: 0.8, step: 0.02 },
   { key: 'previewAlpha', label: '预览亮度', min: 0.2, max: 1, step: 0.02 },
+  { key: 'crackAlpha', label: '夹缝透明度', min: 0.08, max: 1, step: 0.02 },
+  { key: 'crackLeave', label: '夹缝离轴', min: 6, max: 80, step: 1 },
+  { key: 'crackHoldSpeed', label: '夹缝藏缝速度', min: 80, max: 800, step: 10 },
 ];
 
 const LIGHT_SLIDERS: SliderSpec[] = [

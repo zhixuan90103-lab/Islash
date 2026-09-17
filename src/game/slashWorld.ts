@@ -180,6 +180,7 @@ export async function mountSlashWorld(
       mesh: THREE.Mesh;
       c0: DesignPoint;
       c1: DesignPoint;
+      enterEdge?: number;
     },
     commitFlash: boolean,
     crack: { c0: DesignPoint; c1: DesignPoint } | null,
@@ -188,6 +189,23 @@ export async function mountSlashWorld(
     const result = cutMeshBySlash(commit.mesh, camera, commit.c0, commit.c1);
     if (!result) {
       report('碰到了但切开失败');
+      if (!stroke.progress.has(commit.mesh.id)) {
+        const dx = commit.c1.x - commit.c0.x;
+        const dy = commit.c1.y - commit.c0.y;
+        const len = Math.hypot(dx, dy) || 1;
+        stroke.progress.set(commit.mesh.id, {
+          c0: commit.c0,
+          c1: commit.c1,
+          chord: Math.hypot(
+            commit.c1.x - commit.c0.x,
+            commit.c1.y - commit.c0.y,
+          ),
+          inside: false,
+          enterEdge: commit.enterEdge ?? -1,
+          dirx: dx / len,
+          diry: dy / len,
+        });
+      }
       return false;
     }
     stroke.slicedIds.add(commit.mesh.id);

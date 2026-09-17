@@ -170,7 +170,10 @@ export function createSlashOverlay(stage: HTMLElement): {
         const w1 = FLASH.crackW * 0.5;
         ctx.save();
         ctx.shadowBlur = 0;
-        ctx.fillStyle = 'rgba(18, 8, 4, 0.55)';
+        const cr = (FLASH.crackColor >> 16) & 255;
+        const cg = (FLASH.crackColor >> 8) & 255;
+        const cb = FLASH.crackColor & 255;
+        ctx.fillStyle = `rgba(${cr}, ${cg}, ${cb}, ${FLASH.crackAlpha})`;
         ctx.beginPath();
         ctx.moveTo(crack.c0.x + nx * w0, crack.c0.y + ny * w0);
         ctx.lineTo(crack.c1.x + nx * w1, crack.c1.y + ny * w1);

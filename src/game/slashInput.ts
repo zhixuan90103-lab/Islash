@@ -14,6 +14,9 @@ export type MeshSlashProgress = {
   chord: number;
   inside: boolean;
   enterEdge: number;
+  /** 锁 A 时的刀向（单位向量），夹缝沿这条轴，不跟刀尖转。 */
+  dirx: number;
+  diry: number;
 };
 
 export type SlashIntent = {
