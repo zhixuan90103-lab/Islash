@@ -9,6 +9,8 @@ import {
   rankedHullEdges,
   pointInConvexHull,
   projectMeshHull,
+  designToLocalXY,
+  localXYToDesign,
   throughThreshold,
   type ProjBox,
 } from './slashHit';
@@ -141,20 +143,60 @@ function lastOutside(
   return found;
 }
 
+/** 从刀尖往回走，最近一次出板点；太远的旧点不用（避免对边当入边）。 */
+function recentOutside(
+  points: DesignPoint[],
+  hull: DesignPoint[],
+  maxPath: number,
+): DesignPoint | null {
+  if (points.length === 0) return null;
+  let path = 0;
+  const tip = points[points.length - 1];
+  if (!pointInConvexHull(tip, hull)) return tip;
+  for (let i = points.length - 2; i >= 0; i--) {
+    const p = points[i];
+    const n = points[i + 1];
+    path += hypot(n.x - p.x, n.y - p.y);
+    if (path > maxPath) return null;
+    if (!pointInConvexHull(p, hull)) return p;
+  }
+  return null;
+}
+
+function syncLockedA(
+  stroke: SlashStroke,
+  mesh: THREE.Mesh,
+  camera: THREE.Camera,
+  hull?: DesignPoint[],
+): DesignPoint | null {
+  const L = stroke.enterLock;
+  if (!L || L.meshId !== mesh.id) return null;
+  const p = localXYToDesign(mesh, camera, L.localX, L.localY);
+  if (!p) return L.c0;
+  L.c0 = p;
+  if (hull && hull.length >= 3) {
+    L.enterEdge = closestHullEdge(p, hull);
+  }
+  return p;
+}
+
 function lockEnter(
   stroke: SlashStroke,
-  meshId: number,
+  mesh: THREE.Mesh,
+  camera: THREE.Camera,
   c0: DesignPoint,
   tip: DesignPoint,
   enterEdge: number,
 ): boolean {
+  const meshId = mesh.id;
   if (stroke.enterLock) {
     const L = stroke.enterLock;
     if (L.meshId !== meshId) return false;
+    const a = syncLockedA(stroke, mesh, camera) ?? L.c0;
     stroke.progress.set(meshId, {
-      c0: { x: L.c0.x, y: L.c0.y },
+      c0: { x: a.x, y: a.y },
       c1: tip,
-      chord: chordLength(L.c0, tip),
+      chord: chordLength(a, tip),
       inside: true,
       enterEdge: L.enterEdge,
       dirx: L.dirx,
@@ -163,10 +205,14 @@ function lockEnter(
     return true;
   }
   if (chordLength(c0, tip) < START.lockSlop) return false;
+  const local = designToLocalXY(c0, camera, mesh);
+  if (!local) return false;
   const d = unitDir(c0, tip);
   stroke.enterLock = {
     meshId,
     c0: { x: c0.x, y: c0.y },
+    localX: local.x,
+    localY: local.y,
     enterEdge,
     dirx: d.dx,
     diry: d.dy,
@@ -206,8 +252,9 @@ function pickEnterByScore(
     const el = hypot(ex, ey) || 1;
     const nx = -ey / el;
     const ny = ex / el;
-    const align = Math.max(0, nx * sdx + ny * sdy);
-    const score = 0.55 * prox + 0.45 * align;
+    /** 入边 = 刀向穿入（与穿出对边相反），避免右侧进来锁到左侧。 */
+    const incoming = Math.max(0, -(nx * sdx + ny * sdy));
+    const score = 0.7 * prox + 0.3 * incoming;
     if (!best || score > best.score) {
       best = { edge: i, point: row.point, score };
     }
@@ -282,29 +329,29 @@ export function crackAlongStroke(
   const locked = stroke.enterLock;
   const trackedId = stroke.progress.size ? [...stroke.progress.keys()][0] : null;
   const st = trackedId != null ? stroke.progress.get(trackedId) : undefined;
-  const a0 = locked?.c0 ?? st?.c0;
-  if (!a0) return null;
-
   const mesh =
     (trackedId != null ? meshes.find((m) => m.id === trackedId) : undefined) ??
     meshes.find((m) => !stroke.slicedIds.has(m.id));
   if (!mesh) return null;
   const proj = projectMeshHull(mesh, camera);
   if (!proj) return null;
+  const a =
+    syncLockedA(stroke, mesh, camera, proj.hull) ?? locked?.c0 ?? st?.c0;
+  if (!a) return null;
   if (!pointInConvexHull(tip, proj.hull)) return null;
 
   const dx = locked?.dirx ?? st?.dirx ?? 0;
   const dy = locked?.diry ?? st?.diry ?? 0;
   const fast = medianSpeed(stroke, speed) >= FLASH.crackHoldSpeed;
   if (fast && dx * dx + dy * dy > 1e-8) {
-    const lat = Math.abs((tip.x - a0.x) * dy - (tip.y - a0.y) * dx);
+    const lat = Math.abs((tip.x - a.x) * dy - (tip.y - a.y) * dx);
     if (lat > FLASH.crackLeave) return null;
   }
 
   const hit =
-    clipChordToHull(a0, tip, proj.hull) ?? clipBackToEnter(a0, tip, proj.hull);
-  if (hit && chordLength(a0, hit.c1) >= 1) {
-    return { c0: a0, c1: hit.c1 };
+    clipChordToHull(a, tip, proj.hull) ?? clipBackToEnter(a, tip, proj.hull);
+  if (hit && chordLength(a, hit.c1) >= 1) {
+    return { c0: a, c1: hit.c1 };
   }
   return null;
 }
@@ -344,6 +391,11 @@ export function resolveCutBySegment(
       stroke.progress.clear();
       if (stroke.enterLock?.meshId === trackedId) stroke.enterLock = null;
       return note('凸包投影失败');
+    }
+    const lockedA = syncLockedA(stroke, mesh, camera, proj.hull);
+    if (lockedA) {
+      st.c0 = lockedA;
+      st.enterEdge = stroke.enterLock?.enterEdge ?? st.enterEdge;
     }
     const clipped = clipChordToHull(a, b, proj.hull);
     if (clipped) {
@@ -430,11 +482,12 @@ export function resolveCutBySegment(
     const proj = projectMeshHull(mesh, camera);
     if (!proj) continue;
     const insideB = pointInConvexHull(b, proj.hull);
-    const outside = lastOutside(stroke.points, proj.hull);
+    const outside = recentOutside(stroke.points, proj.hull, START.fastDist * 3);
+    const everOutside = lastOutside(stroke.points, proj.hull);
     const fromOutside = !pointInConvexHull(a, proj.hull);
     const micro = clipChordToHull(a, b, proj.hull);
     /**
-     * 入边用「本划最后一个板外点 → 刀尖」，不用当前 5px 微段。
+     * 入边用刀尖附近最近一次出板点，不用整划最远的旧点。
      */
     const strokeClip =
       outside && insideB
@@ -445,16 +498,29 @@ export function resolveCutBySegment(
     const entered = !!clipped || insideB;
     if (!entered) continue;
 
-    if (!fromOutside && !outside) {
-      const press = stroke.points[0] ?? a;
+    if (!strokeClip && insideB) {
       const speed = medianSpeed(stroke, segmentSpeedPxPerSec(a, b, dtSec));
       const radius = startRadius(speed);
-      const slash = { x: b.x - press.x, y: b.y - press.y };
+      const near = rankedHullEdges(b, proj.hull)[0];
+      if (
+        near &&
+        near.dist <= radius &&
+        chordLength(near.point, b) >= START.lockSlop
+      ) {
+        lockEnter(stroke, mesh, camera, near.point, b, near.edge);
+        return note('已锁 A，等出边');
+      }
+    }
+
+    if (!fromOutside && !outside && !everOutside) {
+      const speed = medianSpeed(stroke, segmentSpeedPxPerSec(a, b, dtSec));
+      const radius = startRadius(speed);
+      const slash = { x: b.x - a.x, y: b.y - a.y };
       if (hypot(slash.x, slash.y) < START.lockSlop) continue;
-      const picked = pickEnterByScore(press, slash, proj.hull, radius);
+      const picked = pickEnterByScore(b, slash, proj.hull, radius);
       if (!picked) continue;
-      lockEnter(stroke, mesh.id, picked.point, b, picked.edge);
-      return null;
+      lockEnter(stroke, mesh, camera, picked.point, b, picked.edge);
+      return note('已锁 A，等出边');
     }
 
     const inf = clipped ? null : clipInfiniteLineToHull(a, b, proj.hull);
@@ -481,7 +547,7 @@ export function resolveCutBySegment(
       continue;
     }
 
-    lockEnter(stroke, mesh.id, c0, b, enterEdge);
+    lockEnter(stroke, mesh, camera, c0, b, enterEdge);
     return note('已锁 A，等出边');
   }
   if (!debugWhy) note(stroke.armed ? '未入板' : '未出刃');

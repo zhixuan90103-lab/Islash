@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { DESIGN_HEIGHT, DESIGN_WIDTH } from '../adapt/design';
 import type { DesignPoint } from './slashInput';
+import { designToLocalXY } from './slashHit';
 import {
   meshFromProfile,
   splitConvexPolygon,
@@ -9,28 +9,8 @@ import {
 
 export { prepareCuttable } from './wood';
 
-const _ndc = new THREE.Vector2();
-const _ray = new THREE.Raycaster();
 const _n = new THREE.Vector3();
-const _plane = new THREE.Plane();
 const _fwd = new THREE.Vector3();
-
-function designToLocalXY(
-  p: DesignPoint,
-  camera: THREE.Camera,
-  mesh: THREE.Mesh,
-): Poly2 | null {
-  const n = new THREE.Vector3(0, 0, 1).applyQuaternion(mesh.quaternion);
-  const origin = new THREE.Vector3();
-  mesh.getWorldPosition(origin);
-  _plane.setFromNormalAndCoplanarPoint(n, origin);
-  _ndc.set((p.x / DESIGN_WIDTH) * 2 - 1, -(p.y / DESIGN_HEIGHT) * 2 + 1);
-  _ray.setFromCamera(_ndc, camera);
-  const hit = new THREE.Vector3();
-  if (!_ray.ray.intersectPlane(_plane, hit)) return null;
-  mesh.worldToLocal(hit);
-  return { x: hit.x, y: hit.y };
-}
 
 export function cutMeshBySlash(
   mesh: THREE.Mesh,

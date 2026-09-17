@@ -71,6 +71,8 @@ export type SlashStroke = {
   enterLock: {
     meshId: number;
     c0: DesignPoint;
+    localX: number;
+    localY: number;
     enterEdge: number;
     dirx: number;
     diry: number;
@@ -153,7 +155,7 @@ export function createSlashInput(
     /** 仅刀痕画 ahead，不进切判定。下一 pointermove 会换一批。 */
     onPredicted?: (points: DesignPoint[]) => void;
   },
-): { dispose: () => void } {
+): { dispose: () => void; stroke: () => SlashStroke | null } {
   let stroke: SlashStroke | null = null;
 
   const finish = () => {
@@ -256,6 +258,7 @@ export function createSlashInput(
   window.addEventListener('pointercancel', onCancel);
 
   return {
+    stroke: () => stroke,
     dispose: () => {
       stage.removeEventListener('pointerdown', onDown);
       stage.removeEventListener('pointermove', onMove);

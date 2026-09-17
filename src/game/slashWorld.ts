@@ -451,6 +451,20 @@ export async function mountSlashWorld(
         if (enter.t >= 1) enter = null;
       }
       physics.step(slowing ? dt * FINALE.scale : dt);
+      const liveStroke = input.stroke();
+      if (liveStroke?.enterLock && liveStroke.points.length >= 2) {
+        const tip = liveStroke.points[liveStroke.points.length - 1];
+        const from = liveStroke.points[liveStroke.points.length - 2];
+        const crack = crackAlongStroke(
+          wood.cuttables,
+          camera,
+          liveStroke,
+          tip,
+          from,
+        );
+        if (crack) overlay.setCrack(crack.c0, crack.c1);
+        else overlay.setCrack(null);
+      }
       for (const p of pendingFly) {
         p.keep.position.copy(p.keepRest).add(p.squeeze);
         p.drop.position.copy(p.dropRest).addScaledVector(p.squeeze, -1);

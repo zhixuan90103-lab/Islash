@@ -20,6 +20,41 @@ function ndcToDesign(ndc: THREE.Vector3): DesignPoint {
 }
 
 const _v = new THREE.Vector3();
+const _ndc = new THREE.Vector2();
+const _ray = new THREE.Raycaster();
+const _plane = new THREE.Plane();
+const _hit = new THREE.Vector3();
+
+/** 屏上设计点 → 板局部 XY（板平面）。 */
+export function designToLocalXY(
+  p: DesignPoint,
+  camera: THREE.Camera,
+  mesh: THREE.Mesh,
+): DesignPoint | null {
+  const n = new THREE.Vector3(0, 0, 1).applyQuaternion(mesh.quaternion);
+  const origin = new THREE.Vector3();
+  mesh.getWorldPosition(origin);
+  _plane.setFromNormalAndCoplanarPoint(n, origin);
+  _ndc.set((p.x / DESIGN_WIDTH) * 2 - 1, -(p.y / DESIGN_HEIGHT) * 2 + 1);
+  _ray.setFromCamera(_ndc, camera);
+  if (!_ray.ray.intersectPlane(_plane, _hit)) return null;
+  mesh.worldToLocal(_hit);
+  return { x: _hit.x, y: _hit.y };
+}
+
+/** 板局部 XY → 当前屏上设计点（板在滑入时跟着走）。 */
+export function localXYToDesign(
+  mesh: THREE.Mesh,
+  camera: THREE.Camera,
+  lx: number,
+  ly: number,
+): DesignPoint | null {
+  camera.updateMatrixWorld(true);
+  mesh.updateWorldMatrix(true, false);
+  _v.set(lx, ly, 0).applyMatrix4(mesh.matrixWorld).project(camera);
+  if (!Number.isFinite(_v.x) || !Number.isFinite(_v.y)) return null;
+  return ndcToDesign(_v);
+}
 
 function convexHull(points: DesignPoint[]): ProjPoly {
   const pts = points
