@@ -76,7 +76,7 @@ npm run ios           # build + sync + 开 Xcode
 
 - 玩法：`src/game/`；规则：[docs/SLASH-DESIGN.md](docs/SLASH-DESIGN.md)；意图：[docs/SLASH-INTENT.md](docs/SLASH-INTENT.md)；打击感：[docs/SLASH-FEEL.md](docs/SLASH-FEEL.md)（帮助只管 A 与青线终点；切开成功才 `beginFollow`，同一划的尾巴不再出刀；板内路程过长不算切开，出板再进是新刀）  
 - 保留：adapt / create-renderer / haptics / plugins / `base`  
-- 触控：`clientToDesign` + 忽略 letterbox 外  
+- 触控：`clientToDesign` + 忽略 letterbox 外；最多 3 指独立划（`START.maxStrokes`），同板一把锁 A  
 - UI：只挂 `#ui-root`（进度条 + 调试面板）  
 - 音效：`src/audio/gameAudio.ts` + `docs/AUDIO.md`；禁止热路径 `new Audio()` / 每发一次桥  
 

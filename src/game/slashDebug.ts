@@ -45,6 +45,7 @@ type FlashSeg = {
   born: number;
   follow: boolean;
   finale?: boolean;
+  ownerId?: number;
 };
 
 /** 方向跟夹缝，长度拉到 spanMin 再甩出出端。 */
@@ -110,21 +111,32 @@ function paintSpindle(
 
 export function createSlashOverlay(stage: HTMLElement): {
   canvas: HTMLCanvasElement;
-  begin: () => void;
-  push: (p: DesignPoint) => void;
+  begin: (pointerId: number) => void;
+  ensureTrail: (pointerId: number) => void;
+  push: (pointerId: number, p: DesignPoint) => void;
   setPreview: (c0: DesignPoint | null, c1?: DesignPoint) => void;
-  setCrack: (c0: DesignPoint | null, c1?: DesignPoint) => void;
-  retractCrack: () => void;
-  allowCrack: () => void;
-  setPredicted: (points: DesignPoint[]) => void;
+  setCrack: (
+    c0: DesignPoint | null,
+    c1?: DesignPoint,
+    ownerId?: number,
+  ) => void;
+  retractCrack: (ownerId: number) => void;
+  allowCrack: (ownerId: number) => void;
+  setPredicted: (pointerId: number, points: DesignPoint[]) => void;
   setIntentDebug: (info: IntentDebug | null) => void;
-  flash: (c0: DesignPoint, c1: DesignPoint, follow?: boolean) => void;
-  cancelFlash: () => void;
+  flash: (
+    c0: DesignPoint,
+    c1: DesignPoint,
+    follow?: boolean,
+    ownerId?: number,
+  ) => void;
+  cancelFlash: (ownerId?: number) => void;
   finaleFlash: (c0: DesignPoint, c1: DesignPoint) => void;
   freezeFlash: () => void;
   burstChips: (c0: DesignPoint, c1: DesignPoint, hit: number) => void;
   impactFlash: (hit: number) => void;
-  end: () => void;
+  end: (pointerId: number) => void;
+  endTrail: (pointerId: number) => void;
   step: (now?: number) => void;
   clear: () => void;
 } {
@@ -133,7 +145,16 @@ export function createSlashOverlay(stage: HTMLElement): {
     'position:absolute;inset:0;width:100%;height:100%;z-index:3;pointer-events:none;';
   stage.appendChild(canvas);
   const ctx = canvas.getContext('2d')!;
-  const trail = createFingerTrail();
+  const trails = new Map<number, ReturnType<typeof createFingerTrail>>();
+
+  const trailOf = (id: number) => {
+    let t = trails.get(id);
+    if (!t) {
+      t = createFingerTrail();
+      trails.set(id, t);
+    }
+    return t;
+  };
   const flashes: FlashSeg[] = [];
   let crack: { c0: DesignPoint; c1: DesignPoint } | null = null;
   let crackRetract: {
@@ -145,6 +166,7 @@ export function createSlashOverlay(stage: HTMLElement): {
   } | null = null;
   let crackDraw = 1;
   let crackHeldOff = false;
+  let crackOwner: number | null = null;
   let intentDebug: IntentDebug | null = null;
   let lastPaint = 0;
   const chips: Chip[] = [];
@@ -291,7 +313,10 @@ export function createSlashOverlay(stage: HTMLElement): {
       drawFlash(c0, c1, age, !!f.finale);
     }
 
-    trail.paint(ctx, now);
+    for (const [id, t] of trails) {
+      t.paint(ctx, now);
+      if (t.spent(now)) trails.delete(id);
+    }
 
     if (INTENT.debug) {
       const strokeChord = (
@@ -501,26 +526,36 @@ export function createSlashOverlay(stage: HTMLElement): {
     }
   };
 
-  const begin = () => {
-    trail.begin();
-    crack = null;
-    crackRetract = null;
-    crackHeldOff = false;
-    intentDebug = null;
-    lastPaint = 0;
-    wipe();
+  const begin = (pointerId: number) => {
+    trailOf(pointerId).begin();
+  };
+
+  const ensureTrail = (pointerId: number) => {
+    const t = trailOf(pointerId);
+    if (!t.emitting()) t.begin();
   };
 
   const setPreview = (_c0: DesignPoint | null, _c1?: DesignPoint) => {
     /* 刀光改为一次性扫过，不再钉在切缝上。 */
   };
 
-  const setCrack = (c0: DesignPoint | null, c1?: DesignPoint) => {
+  const setCrack = (
+    c0: DesignPoint | null,
+    c1?: DesignPoint,
+    ownerId?: number,
+  ) => {
+    if (ownerId != null) {
+      if (crackOwner != null && crackOwner !== ownerId) return;
+      crackOwner = ownerId;
+    }
     if (crackHeldOff) return;
     crack = c0 && c1 ? { c0, c1 } : null;
+    if (!crack) crackOwner = null;
   };
 
-  const retractCrack = () => {
+  const retractCrack = (ownerId: number) => {
+    if (crackOwner != null && crackOwner !== ownerId) return;
+    crackOwner = ownerId;
     crackHeldOff = true;
     if (crackRetract || !crack) return;
     const dx = crack.c1.x - crack.c0.x;
@@ -539,31 +574,50 @@ export function createSlashOverlay(stage: HTMLElement): {
     };
   };
 
-  const allowCrack = () => {
+  const allowCrack = (ownerId: number) => {
+    crackOwner = ownerId;
     crackHeldOff = false;
     crackRetract = null;
   };
 
-  const setPredicted = (points: DesignPoint[]) => {
-    trail.setPredicted(points);
+  const setPredicted = (pointerId: number, points: DesignPoint[]) => {
+    trails.get(pointerId)?.setPredicted(points);
   };
 
   const setIntentDebug = (info: IntentDebug | null) => {
     intentDebug = info;
   };
 
-  const flash = (c0: DesignPoint, c1: DesignPoint, follow = false) => {
+  const flash = (
+    c0: DesignPoint,
+    c1: DesignPoint,
+    follow = false,
+    ownerId?: number,
+  ) => {
     flashes.length = 0;
-    flashes.push({ c0, c1, born: performance.now(), follow });
+    flashes.push({ c0, c1, born: performance.now(), follow, ownerId });
   };
 
-  const cancelFlash = () => {
-    flashes.length = 0;
+  const cancelFlash = (ownerId?: number) => {
+    if (ownerId == null) {
+      flashes.length = 0;
+      return;
+    }
+    for (let i = flashes.length - 1; i >= 0; i--) {
+      const o = flashes[i].ownerId;
+      if (o == null || o === ownerId) flashes.splice(i, 1);
+    }
   };
 
   const finaleFlash = (c0: DesignPoint, c1: DesignPoint) => {
     flashes.length = 0;
-    flashes.push({ c0, c1, born: performance.now(), follow: false, finale: true });
+    flashes.push({
+      c0,
+      c1,
+      born: performance.now(),
+      follow: false,
+      finale: true,
+    });
     flashPeak = FINALE.flashPeak;
     flashLeft = Math.max(FX.flashLife, 0.09);
   };
@@ -578,8 +632,8 @@ export function createSlashOverlay(stage: HTMLElement): {
     }
   };
 
-  const push = (p: DesignPoint) => {
-    trail.push(p);
+  const push = (pointerId: number, p: DesignPoint) => {
+    trailOf(pointerId).push(p);
   };
 
   const burstChips = (
@@ -624,17 +678,27 @@ export function createSlashOverlay(stage: HTMLElement): {
     flashLeft = FX.flashLife;
   };
 
-  const end = () => {
-    trail.end();
-    if (!crackRetract) crack = null;
+  const endTrail = (pointerId: number) => {
+    trails.get(pointerId)?.end();
+  };
+
+  const end = (pointerId: number) => {
+    endTrail(pointerId);
+    if (crackOwner != null && crackOwner !== pointerId) return;
+    crack = null;
+    crackRetract = null;
+    crackHeldOff = false;
+    crackOwner = null;
   };
 
   const clear = () => {
-    trail.clear();
+    for (const t of trails.values()) t.clear();
+    trails.clear();
     flashes.length = 0;
     crack = null;
     crackRetract = null;
     crackHeldOff = false;
+    crackOwner = null;
     intentDebug = null;
     lastPaint = 0;
     wipe();
@@ -647,6 +711,7 @@ export function createSlashOverlay(stage: HTMLElement): {
   return {
     canvas,
     begin,
+    ensureTrail,
     push,
     setPreview,
     setCrack,
@@ -661,6 +726,7 @@ export function createSlashOverlay(stage: HTMLElement): {
     burstChips,
     impactFlash,
     end,
+    endTrail,
     step,
     clear,
   };

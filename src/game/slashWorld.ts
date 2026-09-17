@@ -18,6 +18,7 @@ import { projectMeshHull } from './slashHit';
 import {
   createSlashInput,
   segmentSpeedPxPerSec,
+  strokePathLength,
   type ConsumedLine,
   type DesignPoint,
   type SlashStroke,
@@ -71,7 +72,8 @@ export async function mountSlashWorld(
   let lastMeshFail: { c0: DesignPoint; c1: DesignPoint } | null = null;
   let strokeCuts: { c0: DesignPoint; c1: DesignPoint }[] = [];
   let lastClearedLine: ConsumedLine | null = null;
-  let cancelPushed = false;
+  const cancelPushed = new Set<number>();
+  const boardFingers = new Set<number>();
   const pendingFly: {
     rec: PhysBody;
     recKeep?: PhysBody;
@@ -296,15 +298,17 @@ export async function mountSlashWorld(
         seg[1],
         seg[0],
       ) ?? crack;
-    if (crack2) overlay.setCrack(crack2.c0, crack2.c1);
-    else overlay.setCrack(null);
+    if (crack2) overlay.setCrack(crack2.c0, crack2.c1, stroke.pointerId);
+    else overlay.setCrack(null, undefined, stroke.pointerId);
     overlay.freezeFlash();
-    if (!finish && commitFlash) overlay.flash(commit.c0, commit.c1, false);
+    if (!finish && commitFlash) {
+      overlay.flash(commit.c0, commit.c1, false, stroke.pointerId);
+    }
     hud.set(boardCutProgress(originVol, keepVol, finish));
     bladeHaptics.onCut(speedPx, finish);
     const sizeK = Math.min(1, (2 * dropVol) / Math.max(1e-12, dropVol + keepVol));
     gameAudio.crack({ speedPx, sizeK, finish });
-    gameAudio.resetSlide();
+    if (boardFingers.size <= 1) gameAudio.resetSlide();
     report(finish ? '完成切割' : '已切开');
     return true;
   };
@@ -327,49 +331,93 @@ export async function mountSlashWorld(
       })
     : { dispose: () => {} };
 
+  const skipMeshes = (except: SlashStroke): Set<number> => {
+    const ids = new Set<number>();
+    for (const s of input.strokes()) {
+      if (s.pointerId === except.pointerId) continue;
+      if (s.enterLock) ids.add(s.enterLock.meshId);
+      for (const id of s.progress.keys()) ids.add(id);
+    }
+    return ids;
+  };
+
+  const cutterId = (): number | null => {
+    const all = input.strokes();
+    if (all.length === 0) return null;
+    const locked = all.find((s) => s.enterLock);
+    if (locked) return locked.pointerId;
+    const armed = all.filter((s) => s.armed);
+    const pool = armed.length > 0 ? armed : all;
+    let best = pool[0];
+    let bestLen = strokePathLength(best.points);
+    for (let i = 1; i < pool.length; i++) {
+      const len = strokePathLength(pool[i].points);
+      if (len > bestLen || (len === bestLen && pool[i].lastAt > best.lastAt)) {
+        best = pool[i];
+        bestLen = len;
+      }
+    }
+    return best.pointerId;
+  };
+
+  const syncTrails = (active: SlashStroke) => {
+    const id = cutterId();
+    for (const s of input.strokes()) {
+      if (s.pointerId !== id) overlay.endTrail(s.pointerId);
+    }
+    return id === active.pointerId;
+  };
+
   const input = createSlashInput(stage, getLayout, {
     onStroke: (stroke) => {
       if (stroke.points.length === 1) {
-        lastCommit = null;
-        lastMeshFail = null;
-        strokeCuts = [];
-        lastClearedLine = null;
-        overlay.begin();
+        if (syncTrails(stroke)) overlay.begin(stroke.pointerId);
         gameAudio.unlock();
-        cancelPushed = false;
+        cancelPushed.delete(stroke.pointerId);
+        boardFingers.delete(stroke.pointerId);
       }
     },
-    onTip: (p) => {
-      overlay.push(p);
+    onTip: (stroke, p) => {
+      if (syncTrails(stroke)) {
+        overlay.ensureTrail(stroke.pointerId);
+        overlay.push(stroke.pointerId, p);
+      }
     },
-    onPredicted: (points) => {
-      overlay.setPredicted(points);
+    onPredicted: (stroke, points) => {
+      if (syncTrails(stroke)) overlay.setPredicted(stroke.pointerId, points);
+      else overlay.setPredicted(stroke.pointerId, []);
     },
     onMove: (stroke, lastSeg, dtSec) => {
+      if (!syncTrails(stroke)) return;
       const followBefore = stroke.follow;
       const frame = stepSlashIntent(
         wood.cuttables.slice(),
         camera,
         stroke,
         lastSeg,
-        new Set(),
+        skipMeshes(stroke),
         dtSec,
       );
-      if (frame.scribble) {
-        overlay.retractCrack();
-        if (!cancelPushed) {
-          shake.pushIn();
-          cancelPushed = true;
+      if (stroke.enterLock) {
+        if (frame.scribble) {
+          overlay.retractCrack(stroke.pointerId);
+          if (!cancelPushed.has(stroke.pointerId)) {
+            shake.pushIn();
+            cancelPushed.add(stroke.pointerId);
+          }
+        } else {
+          overlay.allowCrack(stroke.pointerId);
+          cancelPushed.delete(stroke.pointerId);
+          if (frame.crack) {
+            overlay.setCrack(frame.crack.c0, frame.crack.c1, stroke.pointerId);
+          } else overlay.setCrack(null, undefined, stroke.pointerId);
         }
-      } else {
-        overlay.allowCrack();
-        cancelPushed = false;
-        if (frame.crack) overlay.setCrack(frame.crack.c0, frame.crack.c1);
-        else overlay.setCrack(null);
       }
       const onBoard =
         !!frame.enter &&
         (frame.phase === 'track' || frame.phase === 'aimed' || !!frame.commit);
+      if (onBoard) boardFingers.add(stroke.pointerId);
+      else boardFingers.delete(stroke.pointerId);
       if (onBoard) {
         gameAudio.slideOnBoard(
           segmentSpeedPxPerSec(lastSeg[0], lastSeg[1], dtSec),
@@ -387,16 +435,17 @@ export async function mountSlashWorld(
         );
         if (!ok) {
           meshFailNow = true;
-          bladeHaptics.cancel();
+          if (boardFingers.size === 0) bladeHaptics.cancel();
         } else {
           strokeCuts.push({ c0: frame.commit.c0, c1: frame.commit.c1 });
         }
       } else {
-        bladeHaptics.onFrame(frame);
-        if (frame.scribble) overlay.cancelFlash();
+        if (onBoard) bladeHaptics.onFrame(frame);
+        else if (boardFingers.size === 0) bladeHaptics.cancel();
+        if (frame.scribble) overlay.cancelFlash(stroke.pointerId);
         else if (frame.earlyFlash) {
           const chord = frame.crack ?? frame.cyan;
-          if (chord) overlay.flash(chord.c0, chord.c1, true);
+          if (chord) overlay.flash(chord.c0, chord.c1, true, stroke.pointerId);
         }
       }
       overlay.setPreview(null);
@@ -434,13 +483,19 @@ export async function mountSlashWorld(
       });
     },
     onEnd: (stroke) => {
-      gameAudio.resetSlide();
-      bladeHaptics.cancel();
-      if (stroke && stroke.slicedIds.size === 0) {
+      if (stroke) {
+        boardFingers.delete(stroke.pointerId);
+        cancelPushed.delete(stroke.pointerId);
+        overlay.setPredicted(stroke.pointerId, []);
+        overlay.end(stroke.pointerId);
+      }
+      if (boardFingers.size === 0) {
+        gameAudio.resetSlide();
+        bladeHaptics.cancel();
+      }
+      if (stroke && stroke.slicedIds.size === 0 && input.strokes().length === 0) {
         report('划过但未贯穿木板');
       }
-      overlay.setPredicted([]);
-      overlay.end();
     },
   });
 
@@ -472,8 +527,10 @@ export async function mountSlashWorld(
         if (enter.t >= 1) enter = null;
       }
       physics.step(slowing ? dt * FINALE.scale : dt);
-      const liveStroke = input.stroke();
-      if (liveStroke?.enterLock && liveStroke.points.length >= 2) {
+      const liveStroke = input
+        .strokes()
+        .find((s) => s.enterLock && s.points.length >= 2);
+      if (liveStroke) {
         const tip = liveStroke.points[liveStroke.points.length - 1];
         const from = liveStroke.points[liveStroke.points.length - 2];
         const crack = crackAlongStroke(
@@ -483,8 +540,10 @@ export async function mountSlashWorld(
           tip,
           from,
         );
-        if (crack) overlay.setCrack(crack.c0, crack.c1);
-        else overlay.setCrack(null);
+        if (crack) overlay.setCrack(crack.c0, crack.c1, liveStroke.pointerId);
+        else overlay.setCrack(null, undefined, liveStroke.pointerId);
+      } else {
+        overlay.setCrack(null);
       }
       for (const p of pendingFly) {
         p.keep.position.copy(p.keepRest).add(p.squeeze);

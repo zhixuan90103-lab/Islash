@@ -153,6 +153,8 @@ export function createFingerTrail(): {
   push: (p: DesignPoint, now?: number) => void;
   end: () => void;
   clear: () => void;
+  spent: (now: number) => boolean;
+  emitting: () => boolean;
   setPredicted: (points: DesignPoint[]) => void;
   paint: (ctx: CanvasRenderingContext2D, now: number) => void;
 } {
@@ -348,11 +350,15 @@ export function createFingerTrail(): {
     }
   };
 
+  const spent = (now: number) => !emitting && windowKnots(knots, now).length === 0;
+
   return {
     begin,
     push,
     end,
     clear,
+    spent,
+    emitting: () => emitting,
     paint,
     setPredicted(points: DesignPoint[]) {
       predicted = points;

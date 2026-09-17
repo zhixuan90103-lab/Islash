@@ -163,6 +163,8 @@ export const SLASH = {
  * 速度越快补偿越大；最慢终点门槛 = 100%（必须真出边）。
  */
 export const START = {
+  /** 同时活着的独立划上限（每指一条）。 */
+  maxStrokes: 3,
   /** 起点：最慢时的吸边半径（设计 px）。 */
   slowDist: 5,
   /** 起点：达到 fastSpeed 时的吸边半径。 */

@@ -4,7 +4,7 @@ import {
   isInDesignBounds,
   type StageLayout,
 } from '../adapt/design';
-import { SLASH } from './design';
+import { SLASH, START } from './design';
 
 export type DesignPoint = { x: number; y: number };
 
@@ -153,31 +153,35 @@ export function createSlashInput(
     onEnd: (stroke: SlashStroke | null) => void;
     onStroke?: (stroke: SlashStroke) => void;
     /** 每个触点（含 <0.5px 的慢划），只给刀痕，不进切判定。 */
-    onTip?: (p: DesignPoint) => void;
+    onTip?: (stroke: SlashStroke, p: DesignPoint) => void;
     /** 仅刀痕画 ahead，不进切判定。下一 pointermove 会换一批。 */
-    onPredicted?: (points: DesignPoint[]) => void;
+    onPredicted?: (stroke: SlashStroke, points: DesignPoint[]) => void;
   },
-): { dispose: () => void; stroke: () => SlashStroke | null } {
-  let stroke: SlashStroke | null = null;
+): {
+  dispose: () => void;
+  stroke: () => SlashStroke | null;
+  strokes: () => SlashStroke[];
+} {
+  const live = new Map<number, SlashStroke>();
 
-  const finish = () => {
-    if (!stroke) return;
-    const ended = stroke;
-    stroke = null;
-    hooks.onPredicted?.([]);
+  const finish = (id: number) => {
+    const ended = live.get(id);
+    if (!ended) return;
+    live.delete(id);
+    hooks.onPredicted?.(ended, []);
     hooks.onEnd(ended);
   };
 
   const onDown = (e: PointerEvent) => {
-    if (!e.isPrimary) return;
     const t = e.target;
     if (t instanceof Element && t.closest('.debug-panel')) return;
-    if (stroke) finish();
+    if (live.has(e.pointerId)) finish(e.pointerId);
+    if (live.size >= START.maxStrokes) return;
     const layout = getLayout();
     if (!layout) return;
     const p = eventToDesign(e, stage, layout);
     const now = performance.now();
-    stroke = {
+    const stroke: SlashStroke = {
       pointerId: e.pointerId,
       points: [p],
       armed: false,
@@ -189,8 +193,9 @@ export function createSlashInput(
       startedAt: now,
       lastAt: now,
     };
+    live.set(e.pointerId, stroke);
     hooks.onStroke?.(stroke);
-    hooks.onTip?.(p);
+    hooks.onTip?.(stroke, p);
     e.preventDefault();
     try {
       stage.setPointerCapture(e.pointerId);
@@ -200,7 +205,8 @@ export function createSlashInput(
   };
 
   const onMove = (e: PointerEvent) => {
-    if (!stroke || e.pointerId !== stroke.pointerId) return;
+    const stroke = live.get(e.pointerId);
+    if (!stroke) return;
     const layout = getLayout();
     if (!layout) return;
 
@@ -222,7 +228,7 @@ export function createSlashInput(
         if (dist(origin, p) >= ARM_DIST) stroke.armed = true;
       }
       if (added > 0) hooks.onStroke?.(stroke);
-      hooks.onTip?.(p);
+      hooks.onTip?.(stroke, p);
       if (stroke.armed && added > 0) {
         const stepDt = dtSec / added;
         for (let i = before; i < stroke.points.length; i++) {
@@ -235,20 +241,25 @@ export function createSlashInput(
       const pred = e.getPredictedEvents();
       const pts: DesignPoint[] = [];
       for (const ev of pred) pts.push(eventToDesign(ev, stage, layout));
-      hooks.onPredicted?.(pts);
+      hooks.onPredicted?.(stroke, pts);
     } else {
-      hooks.onPredicted?.([]);
+      hooks.onPredicted?.(stroke, []);
     }
   };
 
   const onUp = (e: PointerEvent) => {
-    if (!stroke || e.pointerId !== stroke.pointerId) return;
-    finish();
+    if (!live.has(e.pointerId)) return;
+    finish(e.pointerId);
   };
 
   const onCancel = (e: PointerEvent) => {
-    if (!stroke || e.pointerId !== stroke.pointerId) return;
-    finish();
+    if (!live.has(e.pointerId)) return;
+    finish(e.pointerId);
+  };
+
+  const onLostCapture = (e: PointerEvent) => {
+    if (!live.has(e.pointerId)) return;
+    finish(e.pointerId);
   };
 
   stage.style.touchAction = 'none';
@@ -256,16 +267,19 @@ export function createSlashInput(
   stage.addEventListener('pointermove', onMove);
   stage.addEventListener('pointerup', onUp);
   stage.addEventListener('pointercancel', onCancel);
+  stage.addEventListener('lostpointercapture', onLostCapture);
   window.addEventListener('pointerup', onUp);
   window.addEventListener('pointercancel', onCancel);
 
   return {
-    stroke: () => stroke,
+    stroke: () => live.values().next().value ?? null,
+    strokes: () => [...live.values()],
     dispose: () => {
       stage.removeEventListener('pointerdown', onDown);
       stage.removeEventListener('pointermove', onMove);
       stage.removeEventListener('pointerup', onUp);
       stage.removeEventListener('pointercancel', onCancel);
+      stage.removeEventListener('lostpointercapture', onLostCapture);
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onCancel);
     },

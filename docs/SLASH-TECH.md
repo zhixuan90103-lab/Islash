@@ -1,8 +1,8 @@
 # 连续滑动切割 — 技术检索
 
 玩法结论：[SLASH-RESEARCH.md §5](./SLASH-RESEARCH.md)。  
-当前落刀政策（帮助、余势）：[SLASH-INTENT.md](./SLASH-INTENT.md)。  
-本文只写 **怎么实现输入与换网格**：刃活着、段检测、划中换网格。栈：本仓 Pointer Events + 设计坐标 + **2D 轮廓切开**（`slashCut.ts` / `woodProfile.ts` / `woodChamfer.ts`）+ Rapier。网格做法见 [SLASH-DESIGN.md](./SLASH-DESIGN.md)「几何」。
+**现行规则**：[SLASH-INTENT.md](./SLASH-INTENT.md)（落地真源）。多指接线核验见 **§14**。  
+§1–13 是当时检索草稿，时态是「怎么想到连续切」；其中「必须改 / 尚未改代码」已大部分落地，不要当成待办。栈：Pointer Events + 设计坐标 + **2D 轮廓切开**（`slashCut.ts` / `woodProfile.ts` / `woodChamfer.ts`）+ Rapier。网格：[SLASH-DESIGN.md](./SLASH-DESIGN.md)「几何」。
 
 > 检索时写过「keep 钉在原地，同一划必再碰到新网格，所以新块必须可切」。那是**换网格不要漏下一刀**的工程约束。政策上：同一划的尾巴（刀尖还在刚切开的块上，或仍顺着缝）**不再出刀**；离开这些块再进，或折返，才是新刀。不要把本节的 `bornThisSeg` / 新块可切读成「沿同一缝再切一次」。
 
@@ -43,7 +43,7 @@ StopSlice   : collider.off              // 抬手只收刀
 ### 1.4 输入精度
 
 W3C Pointer Events：`pointermove` 会合并采样。快划时只用合并后的点，轨迹会跳过细物体。  
-`getCoalescedEvents()` 还原中间点。本仓 `slashInput.ts` **已经**在用，且 `INTERP_GAP` 插值。连续切必须吃 **段**，不能只吃最后一个点。
+`getCoalescedEvents()` 还原中间点。本仓 `slashInput.ts` **已经**在用，且 `INTERP_GAP` 插值。连续切必须吃 **段**，不能只吃最后一个点。最多 3 条独立划（`START.maxStrokes`），按 `pointerId` 分表；同一 mesh 同时只允许一把锁 A。
 
 ## 2. 对本仓的映射
 
@@ -51,7 +51,7 @@ Unity 用移动的 trigger 球扫过水果。WebGPU 没有等价的每帧物理 
 
 ```
 每一 pointermove（含 coalesced 子点、插值后）:
-  seg = 应是 prev → tip      // 注意：现码 lastSeg 实际是 [整刀起点, 刀尖]，见 §9
+  seg = prev → tip           // 现码：插值后 points[i-1]→[i]，不是整刀起点
   快照 cuttables（切的时候列表会变）
   for mesh in snapshot:
     if mesh.id ∈ slicedThisStroke: skip   // 只跳过「这一划已经切掉的那块」
@@ -76,14 +76,14 @@ Unity 用移动的 trigger 球扫过水果。WebGPU 没有等价的每帧物理 
 | 2D 轮廓切开 + 半平面内收倒角 | `slashCut.ts` / `woodProfile.ts` / `woodChamfer.ts` |
 | 换网格 + Rapier | `slashWorld.replaceCut` / `slashPhysics` |
 
-### 必须改
+### 当时缺口（现已落地）
 
-| 现状 | 改成 |
+| 当时 | 现在 |
 |------|------|
-| `stroke.cutDone` 整划锁死 | `Set<mesh.id>` 本划已切掉的旧块 |
-| 落刀：刀尖离开 **或** up | 段划过轮廓（过 `minChord`）立刻切 |
-| 弦 = 整刀起点→刀尖 | 弦 = `lastSeg`（或 seg 与 hull 的交段） |
-| `tryCut(stroke, 'move'\|'end')` | `tryCutSeg(stroke, seg)`；up 只再跑最后一段 |
+| `stroke.cutDone` 整划锁死 | `slicedIds` 本划已切掉的旧块 |
+| 落刀：刀尖离开或 up | 意图提交（穿边 / 补切）立刻切 |
+| 弦 = 整刀起点→刀尖 | `onMove` 微段 `lastSeg`；刀线仍是锁死的 A→出点 |
+| `tryCut(..., 'end')` | 抬手不再结算；`pointercancel` 只收该划 |
 
 ## 3. 同一帧多目标 / 切完再切
 
@@ -112,7 +112,7 @@ Unity 用移动的 trigger 球扫过水果。WebGPU 没有等价的每帧物理 
 
 不要上 Rapier CCD 当刀：刀不是物理体。
 
-## 6. 建议接口（尚未改代码）
+## 6. 当时建议的接口（历史；`slicedIds` + 微段 onMove 已有）
 
 ```ts
 // SlashStroke
@@ -209,7 +209,7 @@ https://github.com/mrdoob/three.js/blob/dev/src/math/Plane.js
 
 Fruit Ninja 半果飞走，不覆盖这个问题。
 
-## 11. 修正后的落地顺序（仍未改代码）
+## 11. 当时落地顺序（历史；微段 / slicedIds / 余势已落地，刀面退化回退见切开路径）
 
 1. `lastSeg` 改成真正的 **points[n-2]→tip**（插值点也逐段 `onMove`）。  
 2. 每 mesh 本划状态：入点、累计弦；离开或过 `minChord` 再切。  
@@ -273,6 +273,76 @@ Linecast 是「碰到即切」。板要「划穿」：对该 mesh **累计 PE→
 8. 几何切开：只切 `userData.profile`，两块再竖直挤出 + 半平面内收倒角。锐角丢掉内顶点并补面封口。不要 CSG、不要锥台、不要整块降 inset。规范见 [SLASH-DESIGN.md](./SLASH-DESIGN.md)「几何」。  
 9. `pointercancel` = 收刀，不清场景。  
 10. Linecast 式「碰到就切」只适合飞出的水果；钉住的木走累计划穿。
+
+---
+
+## 14. 多指独立划 — 检索计划（三轮）
+
+政策：[SLASH-INTENT.md](./SLASH-INTENT.md)（每指一条划，最多 3，同 mesh 一把锁 A；真贯穿只约束持锁那一划）。  
+本检索只核接线，不改切几何。
+
+### 计划清单（反查补漏后）
+
+| # | 查什么 | 文件 | 期望 |
+|---|--------|------|------|
+| A | 活划表、上限、非主指针 | `slashInput.ts` | `Map<pointerId>`，`START.maxStrokes`，无 `isPrimary` |
+| B | 每指刀痕 begin/push/end | `slashDebug.ts` `slashTrail.ts` | 按 id；end 不误清其它指 |
+| C | 同板占用 | `slashWorld.skipMeshes` | 其它划的 `enterLock` + `progress` 进 `skipIds` |
+| D | 意图仍按单划 | `slashIntent.ts` | 只吃传入的 stroke + skipIds |
+| E | 余势只拦本划 | `slashFollow.ts` | 另一指可切刚切开的 keep（新 id） |
+| F | 夹缝 / 刀光 / 取消推进 | overlay、`screenShake` | 全局一份；计划里写明，不是漏接 |
+| G | 音/震 | `boardFingers` | 最后一指离开才停 |
+| H | cancel / capture | `slashInput` `#stage` | `pointercancel` 只收该 id；`touch-action: none` |
+| I | 刀痕 Map 生命周期 | overlay `trails` | **缺口**：end 不 `delete`，pointerId 递增会积 |
+| J | 一段贯穿 vs 占用 | `resolveCutBySegment` | skip 拦 lock/progress，不拦占用前的一刀贯穿 |
+| K | 调试 HUD | `setIntentDebug` | 最后一次 onMove 覆盖 |
+| L | 顿帧 / 入场 | `pendingFly` `slowLeft` `enter.meshId` | 全局；一指切开冻物理，其它指仍可输入 |
+| M | letterbox | `lastInBoundsSeg` | **死代码**，划出设计区仍进判定（旧问题） |
+| N | `lostpointercapture` | `slashInput` | `finish(id)` |
+| O | `input.stroke()` | `slashInput` | 仍导出第一个；世界已改 `strokes()` |
+
+### 第一轮
+
+对照 A–H 读现码。
+
+- A 已落地：`live` Map，满 3 再 down 直接 return。
+- B `begin(id)` 不再 `wipe` 整画布；`end(id)` 只 `trail.end()`。
+- C `skipMeshes` 在 `createSlashInput` 之前闭包 `input`，onMove 时 `input` 已赋值，可用。
+- D `stepSlashIntent(..., skipIds)` 世界传入 skip。
+- E 余势挂在切开那条 stroke 上；另一指 skip 里没有 keep 新 id。
+- F 夹缝 `find(enterLock)` 一条；`cancelFlash` / `pushIn` 全局。
+- G `boardFingers`；`applyCommit` 里 `size <= 1` 才 `resetSlide`。
+- H `onCancel` 按 id `finish`；`#stage` 与 input 都 `touch-action: none`。
+
+**本轮补进计划：** I（刀痕泄漏）、J（贯穿时序）、K（HUD）。
+
+### 第二轮
+
+针对 I–K、L、M。
+
+- I `trails.get(id)?.end()` 不 `trails.delete(id)`。丝带仍会按 `TRAIL.life` 画完，但 Map 项常驻。
+- J 占用者尚未 `lockEnter` 时，后指 `一段贯穿` 仍可 `commit`（`skipIds` 为空）。事件串行，先 lock 的下一微段才占用。
+- K 对缝调试被后动的那指覆盖；`strokeCuts` 混所有指。
+- L `slowLeft` 终刀减速是世界时间；其它指 onMove 不停。`enter.meshId` 切后改 keep，另一指 skip 的是旧 id。
+- M `lastInBoundsSeg` 无引用。多指不放大此洞，也不修。
+
+**本轮补进计划：** N（lostpointercapture）、O（废弃 `stroke()`）、切开重击停掉另一指持续震。
+
+### 第三轮
+
+- N 无 `lostpointercapture`。iOS 隐式捕获 + 已有 cancel，真机边缘手势仍可能只 cancel 一指（正确）。桌面丢失捕获可能留死划，直到 window `pointerup`。
+- O `stroke()` 仍导出，`src/game` 无调用。
+- `onCut` 先 `stopContinuous` 再重击；另一指还在板上要等它下一次 `onFrame` 才续震。可接受。
+- `preventDefault` 只在 down；move 未 prevent。`touch-action: none` 足够。
+- 第四指无提示。
+- 两指几乎同时 `pushIn`：后一次从当前 dolly 再推进。
+
+### 三轮后的落地（已改）
+
+1. 刀痕 `spent` 后从 Map 删除。  
+2. `cancelFlash` / `allowCrack` / `setCrack` / `retractCrack` 带占用者 id。  
+3. `lostpointercapture` → `finish(id)`。  
+同 mesh 双切排队不做。letterbox 仍旧问题，不绑多指。
 
 ---
 

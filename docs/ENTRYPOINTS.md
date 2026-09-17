@@ -67,6 +67,7 @@ HUD 状态行有 `plugin: true/false`。`false` = 仍在默认 `CAPBridgeViewCon
 | 启动 / 场景 | `index.html` + `main.ts` |
 | 划切规则与参数 | `src/game/design.ts` · [SLASH-DESIGN.md](./SLASH-DESIGN.md) |
 | 意图 / 入点 / 余势 / 夹缝 / 乱划 | `START` `FLASH` · `slashFollow.ts` · [SLASH-INTENT.md](./SLASH-INTENT.md) |
+| 多指独立划检索 | [SLASH-TECH.md](./SLASH-TECH.md) §14 |
 | 手指划痕 | `TRAIL` · `slashTrail.ts` · [SLASH-FEEL.md](./SLASH-FEEL.md) |
 | 顿帧 / 震屏 / 碎屑 | `SHAKE` `FX` · [SLASH-FEEL.md](./SLASH-FEEL.md) |
 | 刀的触觉（马达） | `HAPTIC` · `slashHaptics.ts` · [SLASH-FEEL.md](./SLASH-FEEL.md) |

@@ -44,9 +44,9 @@
 - 输入：Pointer Events，不是系统 Swipe/Pan。
 - CSS：`touch-action: none`（本仓已有）。
 - 时机：见 **§6 连续滑动切割**。参考作是「指还按着、刀还在动就切」，不是松手提交。
-- 取消：未切开的 up / pointercancel / lostpointercapture。
+- 取消：该划的 up / pointercancel / `lostpointercapture`。
 - 跟手：`setPointerCapture`；coalesced 或段插值。
-- 单指：`isPrimary` + 同一 `pointerId`。
+- 多指：每指一条独立 `SlashStroke`，最多 `START.maxStrokes`（3）。同一块板同时只允许一把锁 A。
 - 坐标：`clientToDesign` + `#stage.getBoundingClientRect()`。
   NDC：`x/390*2-1`，`-(y/844)*2+1`。禁止用 `window.innerWidth`。
 - 关 OrbitControls；canvas 保持 `pointer-events: none`；听 `#stage`。
@@ -157,7 +157,6 @@ pointerup    → 刃消失，trail 淡出
 - https://developer.mozilla.org/en-US/docs/Web/API/Element/pointercancel_event
 - https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/touch-action
 - https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent/getCoalescedEvents
-- https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent/isPrimary
 
 ### 3D 切开
 
