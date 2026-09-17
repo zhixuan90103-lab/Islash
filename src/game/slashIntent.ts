@@ -45,6 +45,8 @@ export type IntentFrame = {
   earlyFlash: boolean;
   commit: CutTarget | null;
   commitFlash: boolean;
+  /** 板内路程超标，本刀将取消。 */
+  scribble: boolean;
   /** 本段未提交原因（调试）。提交成功为 commit。 */
   why: string;
 };
@@ -180,6 +182,40 @@ function syncLockedA(
   return p;
 }
 
+function addInBoardPath(
+  stroke: SlashStroke,
+  from: DesignPoint,
+  to: DesignPoint,
+  hull: DesignPoint[],
+): void {
+  const L = stroke.enterLock;
+  if (!L) return;
+  const clip = clipChordToHull(from, to, hull);
+  if (clip) L.path += chordLength(clip.c0, clip.c1);
+  else if (pointInConvexHull(from, hull) && pointInConvexHull(to, hull)) {
+    L.path += chordLength(from, to);
+  }
+}
+
+function pathTooLong(stroke: SlashStroke, straight: number): boolean {
+  const path = stroke.enterLock?.path ?? 0;
+  const chord = Math.max(1e-4, straight);
+  return path / chord > START.pathChordMax;
+}
+
+function scribbleWhy(stroke: SlashStroke, straight: number): string {
+  const path = stroke.enterLock?.path ?? 0;
+  const chord = Math.max(1e-4, straight);
+  return `乱划路程 ${(path / chord).toFixed(1)}×`;
+}
+
+function endUncutAttempt(stroke: SlashStroke, meshId: number): void {
+  stroke.progress.delete(meshId);
+  if (stroke.enterLock?.meshId === meshId) stroke.enterLock = null;
+  resetLock(stroke);
+  stroke.intent.earlyFlashed = false;
+}
+
 function lockEnter(
   stroke: SlashStroke,
   mesh: THREE.Mesh,
@@ -216,6 +252,7 @@ function lockEnter(
     enterEdge,
     dirx: d.dx,
     diry: d.dy,
+    path: chordLength(c0, tip),
   };
   stroke.progress.set(meshId, {
     c0: { x: c0.x, y: c0.y },
@@ -397,6 +434,7 @@ export function resolveCutBySegment(
       st.c0 = lockedA;
       st.enterEdge = stroke.enterLock?.enterEdge ?? st.enterEdge;
     }
+    addInBoardPath(stroke, a, b, proj.hull);
     const clipped = clipChordToHull(a, b, proj.hull);
     if (clipped) {
       st.c1 = clipped.c1;
@@ -428,6 +466,7 @@ export function resolveCutBySegment(
         return note(`行程 ${(ratio * 100).toFixed(0)}% < ${(need * 100).toFixed(0)}%`);
       }
       if (!slashDeepEnough(st.c0, exit, proj.box)) return note('补切不够深');
+      if (pathTooLong(stroke, full)) return note(scribbleWhy(stroke, full));
       stroke.progress.delete(trackedId);
       debugWhy = 'commit 板内补切';
       return {
@@ -461,11 +500,17 @@ export function resolveCutBySegment(
       }
     }
     if (!twoEdges(st.enterEdge, exitEdge, c0, c1, proj.hull)) {
-      /** 同边蹭 / 弯刀假出边：保住 A，不要按下一段方向重锁。 */
+      endUncutAttempt(stroke, trackedId);
       return note(`同边蹭 e${st.enterEdge}→e${exitEdge}`);
     }
     if (!slashDeepEnough(c0, c1, proj.box)) {
+      endUncutAttempt(stroke, trackedId);
       return note('出边不够深');
+    }
+    const straight = chordLength(c0, c1);
+    if (pathTooLong(stroke, straight)) {
+      endUncutAttempt(stroke, trackedId);
+      return note(scribbleWhy(stroke, straight));
     }
     stroke.progress.delete(trackedId);
     debugWhy = 'commit 真出边';
@@ -473,7 +518,7 @@ export function resolveCutBySegment(
       mesh,
       c0,
       c1,
-      chord: Math.max(st.chord, chordLength(c0, c1)),
+      chord: Math.max(st.chord, straight),
       enterEdge: st.enterEdge,
     };
   }
@@ -643,8 +688,14 @@ export function stepSlashIntent(
 
   let earlyFlash = false;
   let commitFlash = false;
+  const scribble =
+    debugWhy.startsWith('乱划路程') ||
+    (!!cyan && pathTooLong(stroke, chordLength(cyan.c0, cyan.c1)));
 
-  if (commit) {
+  if (scribble) {
+    it.flashHot = false;
+    it.aimStable = 0;
+  } else if (commit) {
     commitFlash = !it.earlyFlashed;
   } else {
     if (lockedChord && cyan) {
@@ -694,6 +745,7 @@ export function stepSlashIntent(
     earlyFlash,
     commit,
     commitFlash,
+    scribble,
     why:
       debugWhy ||
       (followBlocks(stroke, seg[0], tip, meshes, camera)

@@ -66,7 +66,7 @@ export type SlashStroke = {
   follow: FollowThrough | null;
   /**
    * 本刀入点，只写一次，绑当时那块 mesh。
-   * 同刀弯向不改 A；跟踪的 mesh 没了 / 切开成功 / 抬手才清。
+   * 同刀弯向不改 A；跟踪的 mesh 没了 / 切开成功 / 抬手 / 未切开就出板才清。
    */
   enterLock: {
     meshId: number;
@@ -76,6 +76,8 @@ export type SlashStroke = {
     enterEdge: number;
     dirx: number;
     diry: number;
+    /** 锁 A 后凸包内走过的路程（设计 px）。 */
+    path: number;
   } | null;
   startedAt: number;
   lastAt: number;

@@ -117,6 +117,7 @@ export function createSlashOverlay(stage: HTMLElement): {
   setPredicted: (points: DesignPoint[]) => void;
   setIntentDebug: (info: IntentDebug | null) => void;
   flash: (c0: DesignPoint, c1: DesignPoint, follow?: boolean) => void;
+  cancelFlash: () => void;
   finaleFlash: (c0: DesignPoint, c1: DesignPoint) => void;
   freezeFlash: () => void;
   burstChips: (c0: DesignPoint, c1: DesignPoint, hit: number) => void;
@@ -498,6 +499,10 @@ export function createSlashOverlay(stage: HTMLElement): {
     flashes.push({ c0, c1, born: performance.now(), follow });
   };
 
+  const cancelFlash = () => {
+    flashes.length = 0;
+  };
+
   const finaleFlash = (c0: DesignPoint, c1: DesignPoint) => {
     flashes.length = 0;
     flashes.push({ c0, c1, born: performance.now(), follow: false, finale: true });
@@ -588,6 +593,7 @@ export function createSlashOverlay(stage: HTMLElement): {
     setPredicted,
     setIntentDebug,
     flash,
+    cancelFlash,
     finaleFlash,
     freezeFlash,
     burstChips,

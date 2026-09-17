@@ -3,11 +3,11 @@
 参数真源：`src/game/design.ts`。手感只改那里（或调试面板，写的是同一份对象）。不要在其它模块再写魔法数。
 
 调研：[SLASH-RESEARCH.md](./SLASH-RESEARCH.md)（玩法参考）、[SLASH-TECH.md](./SLASH-TECH.md)（连续切输入）。  
-意图：[SLASH-INTENT.md](./SLASH-INTENT.md)（入点 / 补切 / 已消费直线 / 刀光 / 夹缝）。  
+意图：[SLASH-INTENT.md](./SLASH-INTENT.md)（入点 A / 补切 / 余势 / 刀光 / 夹缝）。  
 打击感：[SLASH-FEEL.md](./SLASH-FEEL.md)（顿帧、震屏、碎屑、划痕）。  
 本文是**当前工程已落地的规则**。调研里的「Box 三角剖分 / 不做物理」已被覆盖。
 
-近期已落地（参数以 `design.ts` 为准）：切缝深度 `max(minChord, 短边×hullChordRatio)`（4px / 4%）；入点 `enterLock` 只写一次且绑该 mesh；夹缝 `#b1591a` α0.65，出板即灭，慢滑跟转角、快滑离轴才藏；划痕时间制 `slashTrail.ts`（`life` 0.16、`maxLen` 220），触点走 `onTip`。一次滑动同方向余势不切第二刀（8px 走廊）；反转或横走出走廊可切留下块。已回滚：出板才放行 / 加宽走廊当下一刀开关。
+近期已落地（参数以 `design.ts` 为准）：切缝深度 `max(minChord, 短边×hullChordRatio)`（4px / 4%）；A 锁在板上局部 XY，屏上位置跟板走；入边用刀尖附近最近一次出板（约 100px），帮助锁离刀尖最近的边。余势 `slashFollow.ts`：刀尖还在刚切开的块上，或仍顺着缝，算同一划的尾巴。滑入中途切开只继续带留下块。夹缝 `#b1591a` α0.65；划痕 `life` 0.16、`maxLen` 220。已回滚：出板才放行、加宽走廊当下一刀开关、切开面永禁当入边。
 
 ## 一句话
 
@@ -15,9 +15,9 @@
 
 ## 规则
 
-1. **一刀成立**：进出落在**两条不同凸包边上**，且切缝够深。深度 = `max(minChord, hullChordRatio × 投影包围盒短边)`（`throughThreshold`），默认 **4px** 与 **4%**。不要再套一层 `max(4, …)`。同一条边蹭不算。近共面邻边只要仍是两条凸包边且弦够深就能切。终点帮助：对准青线且行程 ≥ T(速度) 时可补出点；最慢须 100% 真出边。
+1. **一刀成立**：进出落在**两条不同凸包边上**，且切缝够深。深度 = `max(minChord, hullChordRatio × 投影包围盒短边)`（`throughThreshold`），默认 **4px** 与 **4%**。不要再套一层 `max(4, …)`。同一条边蹭不算。近共面邻边只要仍是两条凸包边且弦够深就能切。终点帮助：对准青线且行程 ≥ T(速度) 时可补出点；最慢须 100% 真出边。锁 A 后板内路程 / A→出点直线 > `START.pathChordMax`（默认 1.4）不算切开。未切开就出板后再进是新刀，不必抬手。
 2. **下一刀**：同一按住可以多刀。切开后刀尖还在刚切开的块上，或仍顺着缝，都算同一划的尾巴。离开这些块再进才是新刀。细则见意图文。
-3. **命中**：微段与轮廓求交；刀线用入点→出点。从板外进，或起点打分锁 A。**A 锁死到本刀切开或抬手**，弯刀不改入点。板心按下再拖出不记刀。抬手停在板内不切。出边微段跳过凸包时用锁死的 A→刀尖打穿出点。
+3. **命中**：微段与轮廓求交；刀线用入点→出点。从板外进，或起点打分锁 A。**A 锁死到本刀切开、抬手、或未切开就出板**，弯刀不改入点。板心按下再拖出不记刀。抬手停在板内不切。出边微段跳过凸包时用锁死的 A→刀尖打穿出点。
 4. **反馈**：夹缝（入边→刀尖）在下，刀光在中，手指划痕在上。刀光不等于提交。切开成功才顿帧/碎屑/踢屏，见 [SLASH-FEEL.md](./SLASH-FEEL.md)。
 5. **切开**：用刀线切开 **2D 轮廓**（`userData.profile`），每块按同一配方重新挤出。删旧 mesh，加两块。面积×厚度大的留下（static），小的变 dynamic。子块继承整板 `originVolume`。
 6. **刀向**：入点→出点（设计坐标投到板面 XY）。冲量用法线 `Cross(刀向, 相机朝向)`，退化时 `camera.up`。
@@ -181,7 +181,7 @@ J = mass * targetSpeed
 
 提交：`弦长 ≥ max(minChord, hullChordRatio × 短边)`。小块主要卡 `minChord`（4px）；大板卡短边 4%。
 
-入点 / 补切 / 已消费直线 / 刀光 / 夹缝 / 划痕参数见 [SLASH-INTENT.md](./SLASH-INTENT.md)（`START` `INTENT` `FLASH` `TRAIL`）。
+入点 / 补切 / 余势 / 刀光 / 夹缝 / 划痕参数见 [SLASH-INTENT.md](./SLASH-INTENT.md)（`START` `INTENT` `FLASH` `TRAIL`）。
 
 顿帧 / 震屏 / 碎屑 / 闪 / 解冻加踢见 [SLASH-FEEL.md](./SLASH-FEEL.md)（`SHAKE` `FX`）。要点：只冻**这一刀新块**；相机 rest 做玩法，仅渲染前偏移。
 
@@ -195,8 +195,8 @@ J = mass * targetSpeed
 | `cutProgressHud.ts` | `#ui-root` 顶进度条 |
 | `slashInput.ts` | 指针折线、出刃、滑速；`follow` / `enterLock` |
 | `slashFollow.ts` | 余势（同一划的尾巴） |
-| `slashHit.ts` | 轮廓、射线、点在凸包 |
-| `slashIntent.ts` | 意图：锁 A、补切、消费走廊、夹缝/青线、提前刀光 |
+| `slashHit.ts` | 轮廓、射线、点在凸包、屏↔板局部 XY |
+| `slashIntent.ts` | 意图：锁 A、补切、夹缝/青线、提前刀光 |
 | `slashCut.ts` | 板面 XY 上切轮廓，重建两块网格 |
 | `bladeForce.ts` | 冲量合成、质量归一、夹速度；体积用轮廓面积 |
 | `slashPhysics.ts` | Rapier；仅飞出块做体积质心；留下块 fixed |

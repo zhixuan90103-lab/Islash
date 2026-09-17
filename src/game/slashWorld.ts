@@ -381,7 +381,8 @@ export async function mountSlashWorld(
         }
       } else {
         bladeHaptics.onFrame(frame);
-        if (frame.earlyFlash) {
+        if (frame.scribble) overlay.cancelFlash();
+        else if (frame.earlyFlash) {
           const chord = frame.crack ?? frame.cyan;
           if (chord) overlay.flash(chord.c0, chord.c1, true);
         }

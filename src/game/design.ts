@@ -188,6 +188,11 @@ export const START = {
   corridor: 8,
   /** 余势：段方向与已切方向点积大于此才算顺着走。 */
   alongMin: 0.15,
+  /**
+   * 锁 A 后板内路程 / A→出点直线。大于此本刀不算切开。
+   * 未切开就出板后再进是新刀，不必抬手。
+   */
+  pathChordMax: 1.4,
 };
 
 export const START_DEFAULT = { ...START };

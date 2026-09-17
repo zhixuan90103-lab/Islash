@@ -11,6 +11,8 @@ import {
   SHAKE_DEFAULT,
   INTENT,
   INTENT_DEFAULT,
+  START,
+  START_DEFAULT,
   PHYS,
   PHYS_DEFAULT,
   TRAIL,
@@ -69,6 +71,10 @@ const INTENT_SLIDERS: SliderSpec[] = [
   { key: 'unlockAngle', label: '解锁角', min: 10, max: 80, step: 1 },
   { key: 'minSpeed', label: '锁定滑速', min: 20, max: 250, step: 5 },
   { key: 'debug', label: '对缝调试', min: 0, max: 1, step: 1 },
+];
+
+const START_SLIDERS: SliderSpec[] = [
+  { key: 'pathChordMax', label: '乱划路程比', min: 1.2, max: 5, step: 0.1 },
 ];
 
 const FX_SLIDERS: SliderSpec[] = [
@@ -366,6 +372,27 @@ export function mountSlashDebugPanel(
     intentInputs.push({ spec, input, val });
   }
 
+  const startInputs: { spec: SliderSpec; input: HTMLInputElement; val: HTMLSpanElement }[] =
+    [];
+
+  for (const spec of START_SLIDERS) {
+    const row = document.createElement('label');
+    row.className = 'debug-row';
+    const cur = START[spec.key as keyof typeof START];
+    row.innerHTML = `<span>${spec.label}</span><input type="range" min="${spec.min}" max="${spec.max}" step="${spec.step}" /><span class="debug-val"></span>`;
+    const input = row.querySelector('input')!;
+    const val = row.querySelector('.debug-val') as HTMLSpanElement;
+    input.value = String(cur);
+    val.textContent = Number(cur).toFixed(spec.step < 1 ? 2 : 0);
+    input.addEventListener('input', () => {
+      const n = Number(input.value);
+      (START as Record<string, number>)[spec.key] = n;
+      val.textContent = n.toFixed(spec.step < 1 ? 2 : 0);
+    });
+    intentList.appendChild(row);
+    startInputs.push({ spec, input, val });
+  }
+
   const finaleBag = (key: string) =>
     key === 'finishRemain' ? CUT : FINALE;
 
@@ -521,6 +548,11 @@ export function mountSlashDebugPanel(
       input.value = String(n);
       val.textContent = n.toFixed(spec.step < 1 ? 2 : 0);
     }
+    for (const { spec, input, val } of startInputs) {
+      const n = START[spec.key as keyof typeof START];
+      input.value = String(n);
+      val.textContent = n.toFixed(spec.step < 1 ? 2 : 0);
+    }
     for (const { spec, input, val } of finaleInputs) {
       const n = (finaleBag(spec.key) as Record<string, number>)[spec.key];
       input.value = String(n);
@@ -579,6 +611,7 @@ export function mountSlashDebugPanel(
   wrap.querySelector('[data-act="intent"]')!.addEventListener('click', (e) => {
     e.stopPropagation();
     Object.assign(INTENT, INTENT_DEFAULT);
+    Object.assign(START, START_DEFAULT);
     sync();
   });
   wrap.querySelector('[data-act="finale"]')!.addEventListener('click', (e) => {

@@ -74,7 +74,7 @@ npm run ios           # build + sync + 开 Xcode
 
 ## 业务怎么加
 
-- 玩法：`src/game/`；规则：[docs/SLASH-DESIGN.md](docs/SLASH-DESIGN.md)；意图：[docs/SLASH-INTENT.md](docs/SLASH-INTENT.md)；打击感：[docs/SLASH-FEEL.md](docs/SLASH-FEEL.md)（帮助只管 A 与青线终点；切开成功才消费该有向直线，走廊内余势不再出刀）  
+- 玩法：`src/game/`；规则：[docs/SLASH-DESIGN.md](docs/SLASH-DESIGN.md)；意图：[docs/SLASH-INTENT.md](docs/SLASH-INTENT.md)；打击感：[docs/SLASH-FEEL.md](docs/SLASH-FEEL.md)（帮助只管 A 与青线终点；切开成功才 `beginFollow`，同一划的尾巴不再出刀；板内路程过长不算切开，出板再进是新刀）  
 - 保留：adapt / create-renderer / haptics / plugins / `base`  
 - 触控：`clientToDesign` + 忽略 letterbox 外  
 - UI：只挂 `#ui-root`（进度条 + 调试面板）  
