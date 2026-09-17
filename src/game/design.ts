@@ -24,10 +24,14 @@ export function bevelInset(_depth: number): number {
 
 /** 长宽高乘数，默认 1 = 保持 WOOD_SHAPE。lift 为相对画面中心的 Y。 */
 export const WOOD = {
-  width: 1.5,
-  height: 1.5,
+  width: 1.75,
+  height: 1.75,
   depth: 1,
   lift: 0,
+  /** 木纹 UV：世界单位 × 此值。偏小避免一张板跨过 0/1 出现接缝。 */
+  uvScale: 0.3,
+  /** 正面漫反射色，乘木纹 map。未上漆木头不用镜面。 */
+  faceColor: 0xfff3e4,
 };
 
 export function woodSize(): { width: number; height: number; depth: number } {
@@ -43,7 +47,32 @@ export function woodSize(): { width: number; height: number; depth: number } {
  */
 export const CUT = {
   finishRemain: 0.1,
+  /** 完成切割、两块开始飞出后再等多久出下一板（秒）。 */
+  nextDelay: 0.85,
+  /** 新板轮廓包络上限（世界单位），保证落在画面内。 */
+  boardMaxW: 2.15,
+  boardMaxH: 4.1,
+  /** 进场：从画面上方滑到中心的时长（秒）。 */
+  enterDur: 0.48,
+  /** 进场起点相对画面上边的余量。 */
+  enterPad: 0.28,
 };
+
+export function viewHalfH(): number {
+  return VIEW.cameraZ * Math.tan((VIEW.fov * Math.PI) / 360);
+}
+
+/** 进度相对能砍额度 origin * (1 - finishRemain)。完成切割钳到 1。 */
+export function boardCutProgress(
+  originVol: number,
+  keepVol: number,
+  finish: boolean,
+): number {
+  if (finish || originVol <= 1e-12) return 1;
+  const quota = originVol * (1 - CUT.finishRemain);
+  if (quota <= 1e-12) return 1;
+  return Math.min(1, Math.max(0, (originVol - keepVol) / quota));
+}
 
 export const CUT_DEFAULT = { ...CUT };
 
@@ -72,18 +101,44 @@ export const VIEW = {
   fov: 45,
   cameraZ: 6.2,
   /** 参考作水色：中心亮青、四周偏蓝。 */
-  bg: 0x2eb5e0,
-  bgCenter: 0x6ad4f0,
-  bgEdge: 0x0d6e9c,
-  woodColor: 0xd4893a,
-  hemiSky: 0xfff6e8,
-  hemiGround: 0x1a6d8c,
-  hemiIntensity: 0.9,
-  keyColor: 0xfff4e6,
-  keyIntensity: 1.45,
-  /** 偏上、略靠镜头，倒角高光在上沿、暗边在左下。 */
-  keyPos: [1.6, 7.2, 5.4] as const,
+  bg: 0xc44a3a,
+  bgCenter: 0xe07058,
+  bgEdge: 0x5c1814,
+  woodColor: 0xf0c48a,
+  /** 侧面 / 倒角底色，主要靠灯光打出厚度。 */
+  woodChamfer: 0xe8c49a,
+  hemiSky: 0xfff6ea,
+  hemiGround: 0x8a5a40,
+  keyColor: 0xfff3dc,
+  fillColor: 0xfff8f2,
+  /** 背景接影平面（木板在 z≈0 后面）。越靠近板，影子贴得越近。 */
+  bgZ: -0.28,
+  shadowOpacity: 0.38,
 };
+
+/** 灯光：强度 + 主光方位（度）。yaw 0=镜头方向，pitch 90=正上方。 */
+export const LIGHT = {
+  keyIntensity: 3.6,
+  fillIntensity: 0,
+  hemiIntensity: 1.4,
+  keyYaw: -13,
+  keyPitch: 44,
+  keyDist: 6.9,
+};
+
+export const LIGHT_DEFAULT = { ...LIGHT };
+
+export function lightKeyPos(): { x: number; y: number; z: number } {
+  const yaw = (LIGHT.keyYaw * Math.PI) / 180;
+  const pitch = (LIGHT.keyPitch * Math.PI) / 180;
+  const d = LIGHT.keyDist;
+  const cp = Math.cos(pitch);
+  return {
+    x: d * cp * Math.sin(yaw),
+    y: d * Math.sin(pitch),
+    z: d * cp * Math.cos(yaw),
+  };
+}
 
 /** 出刀：采样、出刃、何时落刀。 */
 export const SLASH = {

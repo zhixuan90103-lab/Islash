@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { applyBladeImpulse, pieceVolume } from './bladeForce';
-import { CUT, FINALE, FX, SHAKE } from './design';
+import { boardCutProgress, CUT, FINALE, FX, SHAKE, WOOD } from './design';
+import { mountCutProgressHud } from './cutProgressHud';
 import { createScreenShake, cutHit } from './screenShake';
 import type { PhysBody } from './slashPhysics';
 import {
@@ -9,6 +10,7 @@ import {
   resetSlashIntent,
   stepSlashIntent,
 } from './slashIntent';
+import { applyGameLights } from './lights';
 import { mountSlashDebugPanel } from './slashDebugPanel';
 import { createSlashOverlay } from './slashDebug';
 import { cutMeshBySlash, prepareCuttable } from './slashCut';
@@ -45,6 +47,15 @@ export async function mountSlashWorld(
   const shake = createScreenShake(camera);
   const wood = createWoodSet(scene, physics);
   wood.spawn();
+  let enter: { from: number; to: number; t: number } | null = null;
+  const beginEnter = () => {
+    const mesh = wood.cuttables[0];
+    enter = mesh
+      ? { from: mesh.position.y, to: WOOD.lift, t: 0 }
+      : null;
+  };
+  beginEnter();
+  let nextBoardIn = -1;
   let lastCommit: { c0: DesignPoint; c1: DesignPoint } | null = null;
   const pendingFly: {
     rec: PhysBody;
@@ -151,7 +162,10 @@ export async function mountSlashWorld(
       );
     }
     shake.hit(p.hit, p.dir, p.finish ? FINALE.kickMul : 1);
-    if (p.finish) slowLeft = 0;
+    if (p.finish) {
+      slowLeft = 0;
+      nextBoardIn = CUT.nextDelay;
+    }
   };
 
   const applyCommit = (
@@ -244,18 +258,26 @@ export async function mountSlashWorld(
     else overlay.setCrack(null);
     overlay.freezeFlash();
     if (!finish && commitFlash) overlay.flash(commit.c0, commit.c1, false);
+    hud.set(boardCutProgress(originVol, keepVol, finish));
     report(finish ? '完成切割' : '已切开');
     return true;
   };
 
   const uiRoot = document.getElementById('ui-root');
+  const hud = uiRoot
+    ? mountCutProgressHud(uiRoot)
+    : { set: (_t: number) => {}, dispose: () => {} };
   const panel = uiRoot
     ? mountSlashDebugPanel(uiRoot, {
         onWoodChange: () => {
+          nextBoardIn = -1;
           wood.spawn();
+          beginEnter();
+          hud.set(0);
           slowLeft = 0;
         },
         onGravityChange: (y) => physics.setGravityY(y),
+        onLightChange: () => applyGameLights(),
       })
     : { dispose: () => {} };
 
@@ -330,18 +352,41 @@ export async function mountSlashWorld(
       }
       const slowing = slowLeft > 0;
       if (slowing) slowLeft = Math.max(0, slowLeft - dt);
+      if (enter && CUT.enterDur > 1e-4) {
+        enter.t = Math.min(1, enter.t + dt / CUT.enterDur);
+        const u = 1 - (1 - enter.t) ** 3;
+        const y = enter.from + (enter.to - enter.from) * u;
+        for (const mesh of wood.cuttables) {
+          const rec = physics.bodies.find((b) => b.mesh === mesh);
+          if (!rec) continue;
+          const t = rec.body.translation();
+          rec.body.setTranslation({ x: t.x, y, z: t.z }, true);
+        }
+        if (enter.t >= 1) enter = null;
+      }
       physics.step(slowing ? dt * FINALE.scale : dt);
       for (const p of pendingFly) {
         p.keep.position.copy(p.keepRest).add(p.squeeze);
         p.drop.position.copy(p.dropRest).addScaledVector(p.squeeze, -1);
       }
       shake.step(dt);
+      if (nextBoardIn >= 0) {
+        nextBoardIn -= dt;
+        if (nextBoardIn <= 0) {
+          nextBoardIn = -1;
+          wood.spawn(true);
+          beginEnter();
+          hud.set(0);
+          report('下一块');
+        }
+      }
     },
     applyView: () => shake.applyView(),
     restoreView: () => shake.restoreView(),
     dispose: () => {
       input.dispose();
       panel.dispose();
+      hud.dispose();
       overlay.canvas.remove();
       wood.dispose();
       physics.dispose();

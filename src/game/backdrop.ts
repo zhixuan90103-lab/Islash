@@ -1,39 +1,57 @@
 import * as THREE from 'three';
+import { DESIGN_HEIGHT, DESIGN_WIDTH } from '../adapt/design';
 import { VIEW } from './design';
+import bgUrl from '../assets/bg-dojo.jpg';
 
-function hexRgb(hex: number): [number, number, number] {
-  return [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255];
+/** 关卡背景图。 */
+export function loadBackdropTexture(): Promise<THREE.Texture> {
+  return new Promise((resolve, reject) => {
+    const loader = new THREE.TextureLoader();
+    loader.load(
+      bgUrl,
+      (tex) => {
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.needsUpdate = true;
+        resolve(tex);
+      },
+      undefined,
+      reject,
+    );
+  });
 }
 
-/** 径向水色 + 同心圆，贴在 scene.background。 */
-export function createBackdropTexture(): THREE.CanvasTexture {
-  const w = 512;
-  const h = 1024;
-  const c = document.createElement('canvas');
-  c.width = w;
-  c.height = h;
-  const ctx = c.getContext('2d')!;
-  const [cr, cg, cb] = hexRgb(VIEW.bgCenter);
-  const [er, eg, eb] = hexRgb(VIEW.bgEdge);
-  const g = ctx.createRadialGradient(w * 0.5, h * 0.42, 20, w * 0.5, h * 0.42, h * 0.72);
-  g.addColorStop(0, `rgb(${cr},${cg},${cb})`);
-  g.addColorStop(0.45, `rgb(${(cr + er) >> 1},${(cg + eg) >> 1},${(cb + eb) >> 1})`);
-  g.addColorStop(1, `rgb(${er},${eg},${eb})`);
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, w, h);
+/**
+ * 背景板：贴图不吃光，前面一层 ShadowMaterial 接木板投影。
+ */
+export function mountBackdropPlane(
+  scene: THREE.Scene,
+  tex: THREE.Texture,
+): void {
+  const z = VIEW.bgZ;
+  const dist = VIEW.cameraZ - z;
+  const h = 2 * dist * Math.tan((VIEW.fov * Math.PI) / 360);
+  const w = h * (DESIGN_WIDTH / DESIGN_HEIGHT);
+  const geom = new THREE.PlaneGeometry(w * 1.04, h * 1.04);
 
-  ctx.strokeStyle = 'rgba(8, 70, 110, 0.14)';
-  ctx.lineWidth = 3;
-  const cx = w * 0.5;
-  const cy = h * 0.42;
-  for (let i = 1; i <= 8; i++) {
-    ctx.beginPath();
-    ctx.arc(cx, cy, 48 * i, 0, Math.PI * 2);
-    ctx.stroke();
-  }
+  const art = new THREE.Mesh(
+    geom,
+    new THREE.MeshBasicMaterial({ map: tex, depthWrite: true }),
+  );
+  art.position.z = z;
+  art.renderOrder = -2;
+  scene.add(art);
 
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.needsUpdate = true;
-  return tex;
+  const catcher = new THREE.Mesh(
+    geom,
+    new THREE.ShadowMaterial({
+      color: 0x2a0808,
+      opacity: VIEW.shadowOpacity,
+      transparent: true,
+      depthWrite: false,
+    }),
+  );
+  catcher.position.z = z + 0.02;
+  catcher.receiveShadow = true;
+  catcher.renderOrder = -1;
+  scene.add(catcher);
 }

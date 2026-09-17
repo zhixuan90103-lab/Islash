@@ -18,6 +18,8 @@ import {
   WOOD,
   WOOD_DEFAULT,
   WOOD_SHAPE,
+  LIGHT,
+  LIGHT_DEFAULT,
   woodSize,
 } from './design';
 
@@ -113,6 +115,15 @@ const FLASH_SLIDERS: SliderSpec[] = [
   { key: 'previewAlpha', label: '预览亮度', min: 0.2, max: 1, step: 0.02 },
 ];
 
+const LIGHT_SLIDERS: SliderSpec[] = [
+  { key: 'keyIntensity', label: '主光强度', min: 0, max: 4, step: 0.05 },
+  { key: 'fillIntensity', label: '补光强度', min: 0, max: 2, step: 0.05 },
+  { key: 'hemiIntensity', label: '环境光', min: 0, max: 2, step: 0.05 },
+  { key: 'keyYaw', label: '主光水平角', min: -180, max: 180, step: 1 },
+  { key: 'keyPitch', label: '主光俯仰角', min: 5, max: 85, step: 1 },
+  { key: 'keyDist', label: '主光距离', min: 2, max: 16, step: 0.1 },
+];
+
 const WOOD_FIELDS: { key: keyof typeof WOOD; label: string }[] = [
   { key: 'width', label: '长 X' },
   { key: 'height', label: '高 Y' },
@@ -132,6 +143,7 @@ export function mountSlashDebugPanel(
   hooks: {
     onWoodChange: () => void;
     onGravityChange: (y: number) => void;
+    onLightChange: () => void;
   },
 ): { dispose: () => void } {
   const wrap = document.createElement('section');
@@ -142,6 +154,8 @@ export function mountSlashDebugPanel(
       <p class="debug-sec">木头乘数（1 = 设计形体 ${WOOD_SHAPE.width}×${WOOD_SHAPE.height}×${WOOD_SHAPE.depth}）</p>
       <p class="debug-ratio" id="wood-ratio"></p>
       <div class="debug-wood"></div>
+      <p class="debug-sec">灯光</p>
+      <div class="debug-light"></div>
       <p class="debug-sec">物理</p>
       <div class="debug-sliders"></div>
       <p class="debug-sec">拖尾</p>
@@ -157,6 +171,7 @@ export function mountSlashDebugPanel(
       <p class="debug-sec">刀光</p>
       <div class="debug-flash"></div>
       <div class="debug-actions">
+        <button type="button" data-act="light">重置灯光</button>
         <button type="button" data-act="wood">重置木头</button>
         <button type="button" data-act="phys">重置物理</button>
         <button type="button" data-act="trail">重置拖尾</button>
@@ -173,6 +188,7 @@ export function mountSlashDebugPanel(
 
   const body = wrap.querySelector('.debug-body') as HTMLElement;
   const woodBox = wrap.querySelector('.debug-wood') as HTMLElement;
+  const lightList = wrap.querySelector('.debug-light') as HTMLElement;
   const list = wrap.querySelector('.debug-sliders') as HTMLElement;
   const trailList = wrap.querySelector('.debug-trail') as HTMLElement;
   const intentList = wrap.querySelector('.debug-intent') as HTMLElement;
@@ -224,6 +240,28 @@ export function mountSlashDebugPanel(
     woodInputs.push(input);
   }
   ratioEl.textContent = woodRatioText();
+
+  const lightInputs: { spec: SliderSpec; input: HTMLInputElement; val: HTMLSpanElement }[] =
+    [];
+
+  for (const spec of LIGHT_SLIDERS) {
+    const row = document.createElement('label');
+    row.className = 'debug-row';
+    const cur = LIGHT[spec.key as keyof typeof LIGHT];
+    row.innerHTML = `<span>${spec.label}</span><input type="range" min="${spec.min}" max="${spec.max}" step="${spec.step}" /><span class="debug-val"></span>`;
+    const input = row.querySelector('input')!;
+    const val = row.querySelector('.debug-val') as HTMLSpanElement;
+    input.value = String(cur);
+    val.textContent = Number(cur).toFixed(spec.step < 1 ? 2 : 0);
+    input.addEventListener('input', () => {
+      const n = Number(input.value);
+      (LIGHT as Record<string, number>)[spec.key] = n;
+      val.textContent = n.toFixed(spec.step < 1 ? 2 : 0);
+      hooks.onLightChange();
+    });
+    lightList.appendChild(row);
+    lightInputs.push({ spec, input, val });
+  }
 
   const physInputs: { spec: SliderSpec; input: HTMLInputElement; val: HTMLSpanElement }[] =
     [];
@@ -382,6 +420,11 @@ export function mountSlashDebugPanel(
       woodInputs[i].value = String(WOOD[f.key]);
     });
     ratioEl.textContent = woodRatioText();
+    for (const { spec, input, val } of lightInputs) {
+      const n = LIGHT[spec.key as keyof typeof LIGHT];
+      input.value = String(n);
+      val.textContent = n.toFixed(spec.step < 1 ? 2 : 0);
+    }
     for (const { spec, input, val } of physInputs) {
       const n = PHYS[spec.key as keyof typeof PHYS];
       input.value = String(n);
@@ -419,6 +462,12 @@ export function mountSlashDebugPanel(
     }
   };
 
+  wrap.querySelector('[data-act="light"]')!.addEventListener('click', (e) => {
+    e.stopPropagation();
+    Object.assign(LIGHT, LIGHT_DEFAULT);
+    sync();
+    hooks.onLightChange();
+  });
   wrap.querySelector('[data-act="wood"]')!.addEventListener('click', (e) => {
     e.stopPropagation();
     Object.assign(WOOD, WOOD_DEFAULT);

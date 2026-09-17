@@ -13,4 +13,6 @@ export {
   FX,
   CUT,
   FINALE,
+  LIGHT,
+  boardCutProgress,
 } from './design';

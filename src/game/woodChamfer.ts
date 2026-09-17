@@ -1,8 +1,11 @@
 import * as THREE from 'three';
+import { WOOD } from './design';
 import {
   cleanConvex,
+  earClip,
   inwardDist,
   polyArea,
+  polyIsConvex,
   type Poly2,
 } from './woodProfile';
 
@@ -131,6 +134,7 @@ export function planChamfer(
   const back = cleanConvex(profile);
   const d = Math.min(Math.max(0, inset), depth * 0.45);
   if (back.length < 3 || d <= 1e-8) return prismPlan(back);
+  if (!polyIsConvex(back)) return prismPlan(back);
   if (d >= minAltitude(back) - 1e-6) return prismPlan(back);
 
   const n = back.length;
@@ -189,9 +193,15 @@ export function planChamfer(
   return { back, rim: d, bands, gaps, front };
 }
 
+function vertUv(p: THREE.Vector3): [number, number] {
+  const s = WOOD.uvScale;
+  return [p.x * s + 0.5, p.y * s + 0.5];
+}
+
 function pushTri(
   pos: number[],
   nrm: number[],
+  uv: number[],
   p: THREE.Vector3,
   q: THREE.Vector3,
   r: THREE.Vector3,
@@ -206,6 +216,10 @@ function pushTri(
   const nz = cz / len;
   pos.push(p.x, p.y, p.z, q.x, q.y, q.z, r.x, r.y, r.z);
   nrm.push(nx, ny, nz, nx, ny, nz, nx, ny, nz);
+  const a = vertUv(p);
+  const b = vertUv(q);
+  const c = vertUv(r);
+  uv.push(a[0], a[1], b[0], b[1], c[0], c[1]);
 }
 
 export function createWoodSolid(
@@ -222,16 +236,16 @@ export function createWoodSolid(
   const zChamfer = hd - rim;
   const pos: number[] = [];
   const nrm: number[] = [];
+  const uv: number[] = [];
   const fv = (p: Poly2, z: number) => new THREE.Vector3(p.x, p.y, z);
 
-  const f0 = fv(front[0], zFront);
-  const b0 = fv(back[0], zBack);
-  for (let i = 1; i + 1 < front.length; i++) {
-    pushTri(pos, nrm, f0, fv(front[i], zFront), fv(front[i + 1], zFront));
+  for (const [i, j, k] of earClip(front)) {
+    pushTri(pos, nrm, uv, fv(front[i], zFront), fv(front[j], zFront), fv(front[k], zFront));
   }
-  for (let i = 1; i + 1 < back.length; i++) {
-    pushTri(pos, nrm, b0, fv(back[i + 1], zBack), fv(back[i], zBack));
+  for (const [i, j, k] of earClip(back)) {
+    pushTri(pos, nrm, uv, fv(back[i], zBack), fv(back[k], zBack), fv(back[j], zBack));
   }
+  const faceVerts = pos.length / 3;
 
   for (let i = 0; i < back.length; i++) {
     const j = (i + 1) % back.length;
@@ -241,17 +255,17 @@ export function createWoodSolid(
     if (rim < 1e-8 || !band.chamfer) {
       const co0 = fv(back[i], zChamfer);
       const co1 = fv(back[j], zChamfer);
-      pushTri(pos, nrm, bo0, bo1, co1);
-      pushTri(pos, nrm, bo0, co1, co0);
+      pushTri(pos, nrm, uv, bo0, bo1, co1);
+      pushTri(pos, nrm, uv, bo0, co1, co0);
     } else {
       const co0 = fv(back[i], zChamfer);
       const co1 = fv(back[j], zChamfer);
       const fi0 = fv(band.inner0, zFront);
       const fi1 = fv(band.inner1, zFront);
-      pushTri(pos, nrm, bo0, bo1, co1);
-      pushTri(pos, nrm, bo0, co1, co0);
-      pushTri(pos, nrm, co0, co1, fi1);
-      pushTri(pos, nrm, co0, fi1, fi0);
+      pushTri(pos, nrm, uv, bo0, bo1, co1);
+      pushTri(pos, nrm, uv, bo0, co1, co0);
+      pushTri(pos, nrm, uv, co0, co1, fi1);
+      pushTri(pos, nrm, uv, co0, fi1, fi0);
     }
   }
 
@@ -263,24 +277,31 @@ export function createWoodSolid(
     const pinched = almostSame(gap.innerA, gap.innerB);
     if (pinched) {
       for (let k = 0; k + 1 < outer.length; k++) {
-        pushTri(pos, nrm, ia, outer[k], outer[k + 1]);
+        pushTri(pos, nrm, uv, ia, outer[k], outer[k + 1]);
       }
       continue;
     }
     if (outer.length === 1) {
-      pushTri(pos, nrm, outer[0], ia, ib);
+      pushTri(pos, nrm, uv, outer[0], ia, ib);
       continue;
     }
-    pushTri(pos, nrm, ia, ib, outer[outer.length - 1]);
+    pushTri(pos, nrm, uv, ia, ib, outer[outer.length - 1]);
     for (let k = outer.length - 1; k > 0; k--) {
-      pushTri(pos, nrm, ia, outer[k], outer[k - 1]);
+      pushTri(pos, nrm, uv, ia, outer[k], outer[k - 1]);
     }
   }
 
   if (pos.length < 9) return null;
+  for (const v of pos) {
+    if (!Number.isFinite(v)) return null;
+  }
   const geom = new THREE.BufferGeometry();
   geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
   geom.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(nrm), 3));
+  geom.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uv), 2));
+  const edgeVerts = pos.length / 3 - faceVerts;
+  geom.addGroup(0, faceVerts, 0);
+  if (edgeVerts > 0) geom.addGroup(faceVerts, edgeVerts, 1);
   geom.computeBoundingBox();
   geom.computeBoundingSphere();
   geom.userData.profile = back;

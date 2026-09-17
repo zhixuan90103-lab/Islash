@@ -1,8 +1,10 @@
 import * as THREE from 'three';
 import { pieceVolume } from './bladeForce';
-import { VIEW, WOOD, bevelInset, woodSize } from './design';
+import { CUT, VIEW, WOOD, bevelInset, viewHalfH, woodSize } from './design';
+import woodGrainUrl from '../assets/wood-grain.jpg';
 import { createWoodSolid } from './woodChamfer';
 import {
+  catalogBoardProfile,
   rectProfile,
   type Poly2,
 } from './woodProfile';
@@ -17,6 +19,8 @@ export {
 
 export function prepareCuttable(mesh: THREE.Mesh): void {
   mesh.userData.cuttable = true;
+  mesh.castShadow = true;
+  mesh.receiveShadow = false;
 }
 
 /** @deprecated 历史名，实际是竖挤 + 半平面内收倒角，不是锥台。 */
@@ -53,7 +57,7 @@ export function meshFromProfile(
   if (!geom) return null;
   const srcMat = source.material;
   const mat = Array.isArray(srcMat)
-    ? srcMat[0].clone()
+    ? srcMat.map((m) => m.clone())
     : (srcMat as THREE.Material).clone();
   const m = new THREE.Mesh(geom, mat);
   m.position.copy(source.position);
@@ -68,7 +72,7 @@ export function meshFromProfile(
 
 export type WoodSet = {
   cuttables: THREE.Mesh[];
-  spawn: () => void;
+  spawn: (next?: boolean) => void;
   forget: (mesh: THREE.Mesh) => void;
   track: (mesh: THREE.Mesh) => void;
   dispose: () => void;
@@ -80,12 +84,23 @@ export function createWoodSet(
 ): WoodSet {
   const cuttables: THREE.Mesh[] = [];
   const spawned: THREE.Mesh[] = [];
-  const mat = new THREE.MeshStandardMaterial({
-    color: VIEW.woodColor,
-    metalness: 0.04,
-    roughness: 0.62,
-    flatShading: true,
-  });
+  const grain = new THREE.TextureLoader().load(woodGrainUrl);
+  grain.wrapS = THREE.ClampToEdgeWrapping;
+  grain.wrapT = THREE.ClampToEdgeWrapping;
+  grain.colorSpace = THREE.SRGBColorSpace;
+  grain.anisotropy = 4;
+  const lambert = (color: number) =>
+    new THREE.MeshLambertMaterial({
+      color,
+      map: grain,
+      emissive: 0x000000,
+      specularMap: null,
+      envMap: null,
+      reflectivity: 0,
+    });
+  const matFace = lambert(WOOD.faceColor);
+  const matEdge = lambert(VIEW.woodChamfer);
+  const mat = [matFace, matEdge];
 
   const forget = (mesh: THREE.Mesh) => {
     const i = cuttables.indexOf(mesh);
@@ -98,7 +113,9 @@ export function createWoodSet(
     spawned.push(mesh);
   };
 
-  const spawn = () => {
+  let lastShape = -1;
+
+  const spawn = (_next = false) => {
     for (const m of spawned) {
       physics.removeMesh(m);
       scene.remove(m);
@@ -108,17 +125,30 @@ export function createWoodSet(
     cuttables.length = 0;
 
     const size = woodSize();
-    const mesh = new THREE.Mesh(
-      createWoodGeometry(size.width, size.height, size.depth),
-      mat,
+    const targetArea = size.width * size.height;
+    const picked = catalogBoardProfile(
+      targetArea,
+      CUT.boardMaxW,
+      CUT.boardMaxH,
+      lastShape,
     );
-    mesh.position.set(0, WOOD.lift, 0);
-    mesh.userData.profile = rectProfile(size.width, size.height);
+    const profile = picked.profile;
+    lastShape = picked.index;
+    const geom =
+      createWoodSolid(profile, size.depth, bevelInset(size.depth)) ??
+      createWoodGeometry(size.width, size.height, size.depth);
+    const mesh = new THREE.Mesh(geom, mat);
+    geom.computeBoundingBox();
+    const bb = geom.boundingBox;
+    const minY = bb ? bb.min.y : 0;
+    mesh.position.set(0, viewHalfH() + CUT.enterPad - minY, 0);
+    mesh.userData.profile =
+      (geom.userData.profile as Poly2[] | undefined) ?? profile;
     mesh.userData.depth = size.depth;
     mesh.userData.originVolume = pieceVolume(mesh);
     scene.add(mesh);
     prepareCuttable(mesh);
-    physics.addMesh(mesh, 'staticBox');
+    physics.addMesh(mesh, 'staticConvex');
     cuttables.push(mesh);
     spawned.push(mesh);
   };
@@ -136,7 +166,7 @@ export function createWoodSet(
       }
       spawned.length = 0;
       cuttables.length = 0;
-      mat.dispose();
+      for (const m of mat) m.dispose();
     },
   };
 }

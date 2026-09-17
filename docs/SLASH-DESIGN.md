@@ -21,6 +21,8 @@
 6. **刀向**：入点→出点（设计坐标投到板面 XY）。冲量用法线 `Cross(刀向, 相机朝向)`，退化时 `camera.up`。
 7. **未完成时只踢被砍下的块**。留下的块不位移、不给冲量、不做体积质心平移。
 7b. **完成切割**：切开后较大块体积 `< originVolume * CUT.finishRemain`（默认 0.1）。该刀两块都变 dynamic，各自按刀向 + 相对法线踢飞，不再留下 static。演出：先顿 → 慢放飞出 → 镜头/时间恢复，见 [SLASH-FEEL.md](./SLASH-FEEL.md)「最后一刀」。
+7c. **进度**：相对能砍额度 `origin * (1 - finishRemain)`。未完成 `进度 = (origin - keep) / 额度`；完成切割钳到 100%。条挂 `#ui-root` 顶。飞出后再等 `CUT.nextDelay` 刷下一块。当前图库依次：长六边菱形 → 圆（48 边） → 正方形（整体 80%）→ 循环。包进 `boardMaxW×boardMaxH`。新板进度清零。
+7d. **进场**：新板从画面上方滑入到中心（`CUT.enterDur`，ease-out）后停下。不持续下落、不出下边。
 8. **飞出块**绕体积质心。质量/惯量 = Rapier 密度 × 碰撞体。无地面。
 9. **不伪造**「重的一侧向下」的额外力矩。
 10. **触控**走 `clientToDesign`；letterbox 外忽略。调试面板 `stopPropagation`，不抢刀。
@@ -97,8 +99,9 @@
 | fov / cameraZ | 45 / 6.2 | 透视 |
 | bg / bgCenter / bgEdge | `#2eb5e0` / `#6ad4f0` / `#0d6e9c` | 径向水色；`backdrop.ts` 再画同心圆 |
 | woodColor | `#d4893a` | 木板 |
-| hemiSky / hemiGround / hemiIntensity | `#fff6e8` / `#1a6d8c` / 0.9 | 半球光 |
-| keyColor / keyIntensity / keyPos | `#fff4e6` / 1.45 / `(1.6, 7.2, 5.4)` | 主光偏上、略靠镜头 |
+| hemiSky / hemiGround | `#fff6ea` / `#8a5a40` | 半球光颜色 |
+| LIGHT.keyIntensity / fill / hemi | 3.6 / 0 / 1.4 | 主光 / 补光 / 环境强度 |
+| LIGHT.keyYaw / keyPitch / keyDist | -13° / 44° / 6.9 | 主光方位（调试面板可调） |
 
 CSS `--stage-bg` / `--shell-bg` 与水色对齐，letterbox 不要再是暗海军蓝。
 
