@@ -12,10 +12,10 @@ import {
   throughThreshold,
   type ProjBox,
 } from './slashHit';
+import { followBlocks, stepFollow } from './slashFollow';
 import {
   emptyIntent,
   segmentSpeedPxPerSec,
-  type ConsumedLine,
   type DesignPoint,
   type SlashStroke,
 } from './slashInput';
@@ -105,77 +105,6 @@ export function twoEdges(
   const e = enterEdge >= 0 ? enterEdge : closestHullEdge(c0, hull);
   const x = exitEdge >= 0 ? exitEdge : closestHullEdge(c1, hull);
   return e !== x;
-}
-
-function distToConsumed(p: DesignPoint, line: ConsumedLine): number {
-  return Math.abs((p.x - line.ox) * line.dy - (p.y - line.oy) * line.dx);
-}
-
-export function consumeCutLine(
-  stroke: SlashStroke,
-  c0: DesignPoint,
-  c1: DesignPoint,
-): void {
-  const dx = c1.x - c0.x;
-  const dy = c1.y - c0.y;
-  const len = hypot(dx, dy);
-  if (len < 1e-6) return;
-  stroke.consumed.push({
-    ox: c0.x,
-    oy: c0.y,
-    dx: dx / len,
-    dy: dy / len,
-  });
-}
-
-function releaseConsumed(
-  stroke: SlashStroke,
-  a: DesignPoint,
-  b: DesignPoint,
-): void {
-  const vx = b.x - a.x;
-  const vy = b.y - a.y;
-  const vl = hypot(vx, vy);
-  if (vl < 1) return;
-  const ux = vx / vl;
-  const uy = vy / vl;
-  const w = START.corridor;
-  stroke.consumed = stroke.consumed.filter((line) => {
-    if (distToConsumed(b, line) > w) return true;
-    return ux * line.dx + uy * line.dy >= -0.15;
-  });
-}
-
-function occupying(
-  stroke: SlashStroke,
-  tip: DesignPoint,
-  from?: DesignPoint,
-): boolean {
-  const w = START.corridor;
-  let ux = 0;
-  let uy = 0;
-  let hasDir = false;
-  if (from) {
-    const vx = tip.x - from.x;
-    const vy = tip.y - from.y;
-    const vl = hypot(vx, vy);
-    if (vl >= 1e-4) {
-      ux = vx / vl;
-      uy = vy / vl;
-      hasDir = true;
-    }
-  }
-  return stroke.consumed.some((line) => {
-    if (distToConsumed(tip, line) > w) return false;
-    if (!hasDir) return true;
-    return ux * line.dx + uy * line.dy > START.alongMin;
-  });
-}
-
-/** 余势结束：转走或离开走廊。之后切开面也可当入边。 */
-function endFollowThrough(stroke: SlashStroke, tip: DesignPoint, from: DesignPoint): void {
-  if (!stroke.consumed.length) return;
-  if (!occupying(stroke, tip, from)) stroke.consumed = [];
 }
 
 function slashDeepEnough(
@@ -315,7 +244,7 @@ export function previewCutChord(
   tip: DesignPoint,
   from?: DesignPoint,
 ): CutTarget | null {
-  if (occupying(stroke, tip, from)) return null;
+  if (from && followBlocks(stroke, from, tip, meshes, camera)) return null;
   const trackedId = stroke.progress.size ? [...stroke.progress.keys()][0] : null;
   if (trackedId == null) return null;
   const st = stroke.progress.get(trackedId);
@@ -392,9 +321,9 @@ export function resolveCutBySegment(
   debugWhy = '';
   if (chordLength(a, b) < 1e-4) return note('微段太短');
 
-  releaseConsumed(stroke, a, b);
-  if (occupying(stroke, b, a)) return note('走廊余势（贴着上一刀）');
-  endFollowThrough(stroke, b, a);
+  if (stepFollow(stroke, a, b, meshes, camera)) {
+    return note('走廊余势（贴着上一刀）');
+  }
 
   const live = meshes.filter(
     (m) => !stroke.slicedIds.has(m.id) && !skipIds.has(m.id),
@@ -629,8 +558,6 @@ export function stepSlashIntent(
   );
   const it = stroke.intent;
 
-  releaseConsumed(stroke, seg[0], tip);
-
   const crack = crackAlongStroke(meshes, camera, stroke, tip, seg[0], speed);
   const commit = resolveCutBySegment(
     meshes,
@@ -683,7 +610,7 @@ export function stepSlashIntent(
   const st = trackedId != null ? stroke.progress.get(trackedId) : undefined;
 
   let phase: IntentPhase = 'idle';
-  if (occupying(stroke, tip, seg[0])) phase = 'hold';
+  if (followBlocks(stroke, seg[0], tip, meshes, camera)) phase = 'hold';
   else if (it.locked) phase = 'aimed';
   else if (trackedId != null) phase = 'track';
   else if (stroke.armed) phase = 'arming';
@@ -701,6 +628,10 @@ export function stepSlashIntent(
     earlyFlash,
     commit,
     commitFlash,
-    why: debugWhy || (occupying(stroke, tip, seg[0]) ? '走廊余势（贴着上一刀）' : ''),
+    why:
+      debugWhy ||
+      (followBlocks(stroke, seg[0], tip, meshes, camera)
+        ? '走廊余势（贴着上一刀）'
+        : ''),
   };
 }

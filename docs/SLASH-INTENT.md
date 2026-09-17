@@ -2,7 +2,7 @@
 
 参数真源：`src/game/design.ts`（`START` / `INTENT` / `FLASH` / `TRAIL`）。  
 状态机：`src/game/slashIntent.ts`（`stepSlashIntent`）。  
-本划状态：`src/game/slashInput.ts`（`progress` / `consumed`）。  
+本划状态：`src/game/slashInput.ts`（`progress` / `follow`）。余势：`src/game/slashFollow.ts`。  
 几何：`src/game/slashHit.ts`。绘制：`src/game/slashDebug.ts`。  
 玩法总则：[SLASH-DESIGN.md](./SLASH-DESIGN.md)。
 
@@ -14,7 +14,7 @@
 2. **真贯穿必须有响应。** 一条边进、另一条边出（且缝够深）一定要切。只有「切开后还顺着同一条缝甩」才是余势。转走再进，包括从切开面进，是新刀。
 3. **提交和反馈分开。** 夹缝 / 刀光不是切开。
 4. **帮助只管两点**：起点 A、终点（青线进度）。同一套速度尺子，不叠特例。
-5. **一划不是一次按下。** 一次按下可以多刀；一刀是一条 A→B 趋势。帮助交过的线，继续滑不再出刀。方向横走离开该线，或沿该线折返，才是新刀。
+5. **一划不是一次按下。** 一次按下可以多刀；一刀是一条 A→B。切开后同一划的尾巴仍是这一刀，直到离开留下块且不再顺着甩。
 
 ## 三层
 
@@ -22,7 +22,7 @@
 |----|----------|--------|
 | **提交** | 进出两条不同边，弦够深 | 同边蹭不算 |
 | **帮助** | 起点打分锁 A；终点对准青线且行程 ≥ T(速度) 则补出点 | 不帮：等真入边 / 真出边 |
-| **消费** | 网格切开成功后写入有向无限直线 | 切开失败不写。走廊内余势不开新刀 |
+| **余势** | 网格切开成功后 `beginFollow` | 切开失败不写。尾巴拦住新刀 |
 
 速度越快，起点半径越大、终点 T 越低。最慢 T = **100%**（必须真出边才交）。
 
@@ -34,8 +34,8 @@
 | **行程** | 手指在青线上的投影 / 青线全长。终点帮助与提前刀光都用 `T(速度)`。 |
 | **夹缝** | 入边 A → 当前刀尖（裁在包内）。 |
 | **A** | 本刀入点。写入 `enterLock`（含 `meshId`）+ `progress.c0` 后本刀不改。 |
-| **已消费直线** | 本划刚切开的缝。只在顺着甩时有效；转走或离开走廊即清空。 |
-| **走廊** | 刀尖到该缝的横向距离 ≤ `START.corridor`，且段方向点积 > `alongMin`。 |
+| **余势** | 刚切开的缝 + 留下块。同一划的尾巴。 |
+| **走廊** | 整段到该缝距离 ≤ `START.corridor`（穿过也算），且方向点积 > `alongMin`。 |
 
 ## 提交（必须切）
 
@@ -44,7 +44,7 @@
 3. **切缝够深**：弦长 ≥ `max(minChord, hullChordRatio × 包围盒短边)`（`throughThreshold`）。默认 4px 与 4%。
 4. **该线尚未被本划消费**（见下）。
 5. **抬手停在板内不切。** `pointercancel` 收刀，已切的保留。
-6. 网格切开失败**不**写 `consumed`，并恢复本刀 `progress`，同一条线仍可再交。  
+6. 网格切开失败**不**写余势，并恢复本刀 `progress`，同一条线仍可再交。  
    出边时微段没裁到凸包：用锁死的 A→刀尖无限直线出点再判两边/深度。假出边不丢 A。板心按下再拖出仍不记刀。
 
 同段微段从外贯穿且两边不同、弦够深 → 本段立刻提交。
@@ -66,7 +66,6 @@ A **只写一次**（`stroke.enterLock`，带 `meshId`）。已锁 = `enterLock`
 
 每条凸包边得分 = **0.55 × 近** + **0.45 × 刀向穿入该边**。  
 半径 = `lerp(slowDist, fastDist, t)`。距边超过半径则该边不参与。  
-两端都贴某条已消费直线的边不当入边。  
 总分 ≥ `scoreMin` 才锁 A 到该边上最近点。否则不帮，等真从板外进。
 
 ### 终点（青线）
@@ -77,22 +76,20 @@ A **只写一次**（`stroke.enterLock`，带 `meshId`）。已锁 = `enterLock`
 
 帮助只作用于**尚未交刀**的这一刀。切完 mesh 换了之后，不再对留下的块重新打分锁 A；那是消费层的事。
 
-## 已消费直线（余势）
+## 余势（同一划的尾巴）
 
-只在 **`cutMeshBySlash` 成功** 后由 `consumeCutLine` 写入。帮助补切和真出边一样。本划可有多条。
+实现：`src/game/slashFollow.ts`。只在 **`cutMeshBySlash` 成功** 后 `beginFollow`。帮助补切和真出边一样。同时最多一条。
 
-口径：**余势只拦「这一刀还没甩完」。** 不抬手也可以开新刀。
+**问题（已收成规则）：** 对角快划帮助切提前交刀后，5px 尾巴会在留下块尖角再做一次进出，变成第二刀。余势的职责就是把这段尾巴当成还是第一刀。
 
-切开成功后记下那条缝。只有刀尖还在 8px 走廊里 **并且** 段方向仍顺着切（点积 > `alongMin`）才拦截。一旦转走（约 90°）或离开走廊，名单立刻清空。之后从哪条边进都可以，**包括刚切开的平缝**。
+规则：
 
-| 情况 | 行为 |
-|------|------|
-| 走廊内且仍沿该方向 | 同一刀余势：禁锁 A、禁提交 |
-| 转走 / 横穿 / 离开走廊 | 余势结束，可立刻切留下块（切开面可当入边） |
-| 沿该线折返（点积 < −0.15） | 丢掉这条，反向可切 |
-| 抬手 | `consumed` 清空 |
-
-不要用整屏无限直线当「永远不能穿过的墙」。橙带只在余势还有效时出现。
+1. 记下切开弦、留下块 `keepId`、飞出块 `dropId`。
+2. **拦住新刀**：整段仍扫过走廊且方向顺着，**或者刀尖还在刚切开的任一块凸包里**（弯着划的尾巴也算同一刀）。
+3. **离开这两块且不再顺着**：余势结束；结束的那一段也不交刀（避免尖角贯穿）。
+4. **折返**（点积 < −0.15 且扫过走廊）：立刻结束，反向可切。
+5. **抬手**：`follow = null`。
+6. 出板再进（含切开面）才是新刀。还在留下块上转腕不算新刀。
 
 ## 反馈
 
@@ -119,13 +116,13 @@ A **只写一次**（`stroke.enterLock`，带 `meshId`）。已锁 = `enterLock`
 
 ### 对缝调试
 
-`INTENT.debug = 1`：绿虚 = 投影凸包，青 = 青线，粉 = 锁定弦，黄 = 真切开，橙带 = 已消费走廊，红点 A = 入点，红虚 = 意图过了但轮廓没切开。左上角写本段未切原因。默认关；调试面板「对缝调试」可开。
+`INTENT.debug = 1`：绿虚 = 凸包，青 = 青线，黄 = 本划第 1 刀，粉粗 = 第 2 刀，橙 = 余势，灰虚 = 刚清掉的余势，白 = 当前微段。默认关；调试面板「对缝调试」可开。
 
 ## 状态机
 
 `stepSlashIntent` 每微段：写入速度样本 → 释放折返线 → 夹缝 → `resolveCutBySegment` → 青线 / 刀光锁 → 提前闪谓词。
 
-`slashWorld` 只编排：`setCrack` → 若 `commit` 则切网格（成功才 `consumeCutLine` / `freezeFlash` / `commitFlash`）→ 否则 `earlyFlash`。
+`slashWorld` 只编排：`setCrack` → 若 `commit` 则切网格（成功才 `beginFollow` / `freezeFlash` / `commitFlash`）→ 否则 `earlyFlash`。
 
 `INTENT.unlockAngle` 只灭刀光锁，不丢本刀 `progress`。
 
@@ -153,7 +150,7 @@ A **只写一次**（`stroke.enterLock`，带 `meshId`）。已锁 = `enterLock`
 | lockSegs / minFromEnter | 2 / 8 | 刀光锁定段数、离入点 |
 | lockAngle / unlockAngle | 18 / 34 | 锁定角 / 解锁角（度） |
 | minSpeed | 30 | 未锁时低于此不锁刀光 |
-| debug | 0 | 对缝彩线（凸包 / 青 / 粉 / 黄 / 走廊 / 失败原因） |
+| debug | 0 | 对缝彩线（刀数 / 余势清掉 / 第2刀） |
 
 ### `FLASH`（节选）
 
@@ -185,9 +182,10 @@ A **只写一次**（`stroke.enterLock`，带 `meshId`）。已锁 = `enterLock`
 | 文件 | 职责 |
 |------|------|
 | `design.ts` | `START` / `INTENT` / `FLASH` / `TRAIL` |
-| `slashInput.ts` | 指针折线；`consumed[]`；`progress`；`enterLock` |
+| `slashInput.ts` | 指针折线；`follow`；`progress`；`enterLock` |
+| `slashFollow.ts` | 余势：尾巴拦住新刀 |
 | `slashIntent.ts` | 政策：锁 A、补切、消费走廊、青线、夹缝几何、提前闪 |
-| `slashWorld.ts` | 切网格（成功才 `consumeCutLine`）、顿帧、物理、overlay |
+| `slashWorld.ts` | 切网格（成功才 `beginFollow`）、顿帧、物理、overlay |
 | `slashHit.ts` | 凸包、裁线 |
 | `slashDebug.ts` | 夹缝 / 刀光 / 碎屑 / 闪 overlay |
 | `slashTrail.ts` | 手指划痕（时间制） |

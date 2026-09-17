@@ -5,11 +5,11 @@ import { mountCutProgressHud } from './cutProgressHud';
 import { createScreenShake, cutHit } from './screenShake';
 import type { PhysBody } from './slashPhysics';
 import {
-  consumeCutLine,
   crackAlongStroke,
   resetSlashIntent,
   stepSlashIntent,
 } from './slashIntent';
+import { beginFollow } from './slashFollow';
 import { applyGameLights } from './lights';
 import { mountSlashDebugPanel } from './slashDebugPanel';
 import { createSlashOverlay } from './slashDebug';
@@ -18,6 +18,7 @@ import { projectMeshHull } from './slashHit';
 import {
   createSlashInput,
   segmentSpeedPxPerSec,
+  type ConsumedLine,
   type DesignPoint,
   type SlashStroke,
 } from './slashInput';
@@ -63,6 +64,8 @@ export async function mountSlashWorld(
   let nextBoardIn = -1;
   let lastCommit: { c0: DesignPoint; c1: DesignPoint } | null = null;
   let lastMeshFail: { c0: DesignPoint; c1: DesignPoint } | null = null;
+  let strokeCuts: { c0: DesignPoint; c1: DesignPoint }[] = [];
+  let lastClearedLine: ConsumedLine | null = null;
   const pendingFly: {
     rec: PhysBody;
     recKeep?: PhysBody;
@@ -270,7 +273,13 @@ export async function mountSlashWorld(
       pendingFly.push(pending);
     }
     lastCommit = { c0: commit.c0, c1: commit.c1 };
-    consumeCutLine(stroke, commit.c0, commit.c1);
+    beginFollow(
+      stroke,
+      commit.c0,
+      commit.c1,
+      pieces.keep.id,
+      pieces.drop.id,
+    );
     const crack2 =
       crackAlongStroke(
         wood.cuttables,
@@ -315,6 +324,8 @@ export async function mountSlashWorld(
       if (stroke.points.length === 1) {
         lastCommit = null;
         lastMeshFail = null;
+        strokeCuts = [];
+        lastClearedLine = null;
         overlay.begin();
         gameAudio.unlock();
       }
@@ -326,6 +337,7 @@ export async function mountSlashWorld(
       overlay.setPredicted(points);
     },
     onMove: (stroke, lastSeg, dtSec) => {
+      const followBefore = stroke.follow;
       const frame = stepSlashIntent(
         wood.cuttables.slice(),
         camera,
@@ -357,6 +369,8 @@ export async function mountSlashWorld(
         if (!ok) {
           meshFailNow = true;
           bladeHaptics.cancel();
+        } else {
+          strokeCuts.push({ c0: frame.commit.c0, c1: frame.commit.c1 });
         }
       } else {
         bladeHaptics.onFrame(frame);
@@ -366,6 +380,9 @@ export async function mountSlashWorld(
         }
       }
       overlay.setPreview(null);
+      if (followBefore && !stroke.follow) {
+        lastClearedLine = followBefore;
+      }
       const trackedMesh =
         frame.meshId != null
           ? wood.cuttables.find((m) => m.id === frame.meshId)
@@ -389,8 +406,11 @@ export async function mountSlashWorld(
         enterEdge: frame.enterEdge,
         travel: frame.travelRatio,
         occupying: frame.phase === 'hold',
-        consumed: stroke.consumed,
+        consumed: stroke.follow ? [stroke.follow] : [],
         meshFail: lastMeshFail,
+        cuts: strokeCuts,
+        cleared: lastClearedLine,
+        seg: { c0: lastSeg[0], c1: lastSeg[1] },
       });
     },
     onEnd: (stroke) => {

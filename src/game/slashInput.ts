@@ -43,13 +43,17 @@ export function emptyIntent(): SlashIntent {
   };
 }
 
-/** 本划余势：刚切开的那条缝，只在「还顺着甩」时有效。 */
-export type ConsumedLine = {
+/** 本划余势：刚切开的缝 + 留下块。同一时间最多一条。 */
+export type FollowThrough = {
   ox: number;
   oy: number;
   dx: number;
   dy: number;
+  keepId: number;
+  dropId: number;
 };
+
+export type ConsumedLine = FollowThrough;
 
 export type SlashStroke = {
   pointerId: number;
@@ -58,8 +62,8 @@ export type SlashStroke = {
   slicedIds: Set<number>;
   progress: Map<number, MeshSlashProgress>;
   intent: SlashIntent;
-  /** 本划余势。转走 / 离开走廊即清空，不必抬手。 */
-  consumed: ConsumedLine[];
+  /** 本划余势。同一划的尾巴；离开留下块且不再顺着才清。 */
+  follow: FollowThrough | null;
   /**
    * 本刀入点，只写一次，绑当时那块 mesh。
    * 同刀弯向不改 A；跟踪的 mesh 没了 / 切开成功 / 抬手才清。
@@ -175,7 +179,7 @@ export function createSlashInput(
       armed: false,
       slicedIds: new Set(),
       progress: new Map(),
-      consumed: [],
+      follow: null,
       enterLock: null,
       intent: emptyIntent(),
       startedAt: now,
