@@ -163,7 +163,7 @@ export const SLASH = {
  * 速度越快补偿越大；最慢终点门槛 = 100%（必须真出边）。
  */
 export const START = {
-  /** 同时活着的独立划上限（每指一条）。 */
+  /** 同时按下的触点上限。有效刀始终只有一把。 */
   maxStrokes: 3,
   /** 起点：最慢时的吸边半径（设计 px）。 */
   slowDist: 5,
@@ -399,12 +399,12 @@ export const HAPTIC = {
   attack: 0.15,
   /** 硬上限（秒）。到点自动停，不拖到插件 30s 帽。 */
   maxHold: 2,
-  cutI0: 0.45,
-  cutI1: 0.74,
-  cutS0: 0.42,
-  cutS1: 0.72,
+  cutI0: 0.4,
+  cutI1: 0.65,
+  cutS0: 0.3,
+  cutS1: 0.5,
   /** 完成切割时切开瞬态强度倍率。 */
-  finishMul: 1.2,
+  finishMul: 1.5,
 };
 
 export const HAPTIC_DEFAULT = { ...HAPTIC };

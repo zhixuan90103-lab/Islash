@@ -8,7 +8,7 @@
 |------|------|
 | [AGENTS.md](./AGENTS.md) | AI / 新窗口第一入口 |
 | [docs/SLASH-DESIGN.md](./docs/SLASH-DESIGN.md) | 划切规则、参数表、模块 |
-| [docs/SLASH-INTENT.md](./docs/SLASH-INTENT.md) | 入点 A、补切、余势、夹缝 |
+| [docs/SLASH-INTENT.md](./docs/SLASH-INTENT.md) | 入点 A、补切、余势、夹缝、乱划、有效刀 |
 | [docs/SLASH-FEEL.md](./docs/SLASH-FEEL.md) | 顿帧、震屏、划痕、刀震 |
 | [docs/SLASH-RESEARCH.md](./docs/SLASH-RESEARCH.md) | iSlash Masters / 切开几何调研 |
 | [docs/SLASH-TECH.md](./docs/SLASH-TECH.md) | 连续滑动切割的技术检索 |

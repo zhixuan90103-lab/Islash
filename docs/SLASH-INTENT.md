@@ -56,7 +56,17 @@
 
 ### 起点 A
 
-A **只写一次**（`stroke.enterLock`，带 `meshId` + 板上局部 XY）。已锁 = `enterLock` 有值。最多 3 指按下；**同时只一把有效刀**。误触按着不动不算刀。有效刀 = 已锁 A 的那指，否则划得更长（已出刃优先）的那指。刀痕和切开只跟这一指。锁 A 之后不再换人，直到这指抬起。夹缝每帧把 A 投回屏幕，新板滑入时跟着走。切开成功、抬手、跟踪的那块 mesh 没了、或未切开就出板才清空。弯刀不得改 A（板上那个点）。不得把 A 复用到另一块活板上。出板后再进重新锁 A，不必抬手。
+A **只写一次**（`stroke.enterLock`，带 `meshId` + 板上局部 XY）。已锁 = `enterLock` 有值。夹缝每帧把 A 投回屏幕，新板滑入时跟着走。切开成功、抬手、跟踪的那块 mesh 没了、或未切开就出板才清空。弯刀不得改 A（板上那个点）。不得把 A 复用到另一块活板上。出板后再进重新锁 A，不必抬手。
+
+### 有效刀（多指）
+
+可同时按下最多 `START.maxStrokes`（3）指，屏幕上**只有一把有效刀**。
+
+- 误触按着不动：不算刀、不挡后面真滑的那指。
+- 有效刀 = 已锁 A 的那指；还没锁则取已出刃里路程最长的，都没出刃则取路程最长的。
+- 刀痕、夹缝、切开只跟有效刀。其它指可以碰屏，不切、不出痕。
+- 锁 A 之后不换人，直到这指抬起 / cancel / `lostpointercapture`。
+- 抬手清掉这指占用的夹缝。
 
 如何锁：
 
@@ -110,7 +120,7 @@ A **只写一次**（`stroke.enterLock`，带 `meshId` + 板上局部 XY）。�
 
 ### 划痕（`TRAIL`）
 
-时间制丝带：可见段 = 最近 `life` 秒的触点路径，再钳 `maxLen`。快划长、慢划短但始终能看见。抬手或停手后点过期，尾巴按 `life` 收掉。触点走 `onTip`，不进切开判定。绘制：弧长重采样 + 圆内点 + 向心 Catmull-Rom。停住/抬手：旧点过期，尾巴自己收。刀尖三角 `tipLen`。`predictAlpha` 0。参数见下表；模块 `slashTrail.ts`，调研 [SLASH-TRAIL.md](./SLASH-TRAIL.md)。
+时间制丝带：可见段 = 最近 `life` 秒的触点路径，再钳 `maxLen`。快划长、慢划短但始终能看见。抬手或停手后点过期，尾巴按 `life` 收掉。只画有效刀的触点（`onTip`），不进切开判定。绘制：弧长重采样 + 圆内点 + 向心 Catmull-Rom。刀尖三角 `tipLen`。`predictAlpha` 0。参数见下表；模块 `slashTrail.ts`，调研 [SLASH-TRAIL.md](./SLASH-TRAIL.md)。
 
 ### 对缝调试
 
@@ -120,7 +130,7 @@ A **只写一次**（`stroke.enterLock`，带 `meshId` + 板上局部 XY）。�
 
 `stepSlashIntent` 每微段：写入速度样本 → 夹缝 → `resolveCutBySegment`（先 `stepFollow`）→ 青线 / 刀光锁 → 提前闪谓词。
 
-`slashWorld` 只编排：`setCrack` → 若 `commit` 则切网格（成功才 `beginFollow` / 顿帧 / 闪）→ 否则 `earlyFlash`。滑入中途切开：入场 Y 只继续带 keep。夹缝在 `step` 里按板上局部 A 每帧重投。
+`slashWorld` 只编排：先定有效刀 → `setCrack` → 若 `commit` 则切网格（成功才 `beginFollow` / 顿帧 / 闪）→ 否则 `earlyFlash`。非有效刀的微段不进意图。滑入中途切开：入场 Y 只继续带 keep。夹缝在 `step` 里按板上局部 A 每帧重投；抬手或没有锁 A 的活划则清缝。
 
 `INTENT.unlockAngle` 只灭刀光锁，不丢本刀 `progress`。
 
@@ -132,7 +142,7 @@ A **只写一次**（`stroke.enterLock`，带 `meshId` + 板上局部 XY）。�
 
 | 键 | 默认 | 作用 |
 |----|------|------|
-| maxStrokes | 3 | 同时独立划上限（每指一条） |
+| maxStrokes | 3 | 同时按下触点上限；有效刀始终一把 |
 | slowDist / fastDist | 5 / 36 | 起点半径：最慢 / 满速 |
 | fastSpeed | 160 | 速度尺子满档 |
 | endTravelFast | 0.8 | 满速终点行程门槛（最慢为 1） |

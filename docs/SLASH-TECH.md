@@ -43,7 +43,7 @@ StopSlice   : collider.off              // 抬手只收刀
 ### 1.4 输入精度
 
 W3C Pointer Events：`pointermove` 会合并采样。快划时只用合并后的点，轨迹会跳过细物体。  
-`getCoalescedEvents()` 还原中间点。本仓 `slashInput.ts` **已经**在用，且 `INTERP_GAP` 插值。连续切必须吃 **段**，不能只吃最后一个点。最多 3 条独立划（`START.maxStrokes`），按 `pointerId` 分表；同一 mesh 同时只允许一把锁 A。
+`getCoalescedEvents()` 还原中间点。本仓 `slashInput.ts` **已经**在用，且 `INTERP_GAP` 插值。连续切必须吃 **段**，不能只吃最后一个点。触点按 `pointerId` 分表（最多 3）；**有效刀一把**（`slashWorld.cutterId`），意图和刀痕只跟它。
 
 ## 2. 对本仓的映射
 
@@ -278,14 +278,14 @@ Linecast 是「碰到即切」。板要「划穿」：对该 mesh **累计 PE→
 
 ## 14. 多指独立划 — 检索计划（三轮）
 
-政策：[SLASH-INTENT.md](./SLASH-INTENT.md)（每指一条划，最多 3，同 mesh 一把锁 A；真贯穿只约束持锁那一划）。  
+政策：[SLASH-INTENT.md](./SLASH-INTENT.md)（最多 3 触点，有效刀一把；真贯穿只约束持锁那一划）。  
 本检索只核接线，不改切几何。
 
 ### 计划清单（反查补漏后）
 
 | # | 查什么 | 文件 | 期望 |
 |---|--------|------|------|
-| A | 活划表、上限、非主指针 | `slashInput.ts` | `Map<pointerId>`，`START.maxStrokes`，无 `isPrimary` |
+| A | 活划表、上限、有效刀 | `slashInput.ts` `slashWorld.cutterId` | `Map<pointerId>` 最多 3；意图/刀痕只跟有效刀 |
 | B | 每指刀痕 begin/push/end | `slashDebug.ts` `slashTrail.ts` | 按 id；end 不误清其它指 |
 | C | 同板占用 | `slashWorld.skipMeshes` | 其它划的 `enterLock` + `progress` 进 `skipIds` |
 | D | 意图仍按单划 | `slashIntent.ts` | 只吃传入的 stroke + skipIds |

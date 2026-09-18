@@ -46,7 +46,7 @@
 - 时机：见 **§6 连续滑动切割**。参考作是「指还按着、刀还在动就切」，不是松手提交。
 - 取消：该划的 up / pointercancel / `lostpointercapture`。
 - 跟手：`setPointerCapture`；coalesced 或段插值。
-- 多指：每指一条独立 `SlashStroke`，最多 `START.maxStrokes`（3）。同一块板同时只允许一把锁 A。
+- 多指：可同时按下最多 3 指，**有效刀一把**（已锁 A，否则路程最长 / 已出刃优先）。误触按着不动不挡真滑。刀痕只画有效刀。详见 [SLASH-INTENT.md](./SLASH-INTENT.md)「有效刀」。
 - 坐标：`clientToDesign` + `#stage.getBoundingClientRect()`。
   NDC：`x/390*2-1`，`-(y/844)*2+1`。禁止用 `window.innerWidth`。
 - 关 OrbitControls；canvas 保持 `pointer-events: none`；听 `#stage`。

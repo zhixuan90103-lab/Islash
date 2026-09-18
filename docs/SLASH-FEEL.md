@@ -41,6 +41,15 @@ hit    = clamp(speedK * sizeK, SHAKE.floor, 1)
   → 全程不震
 ```
 
+| 键 | 默认 | 作用 |
+|----|------|------|
+| enterI / enterS | 0.3 / 0.24 | 锁 A 轻击 |
+| holdI / holdS | 0.16 / 0.6 | 板上持续 |
+| attack / maxHold | 0.15 / 2 | 渐起秒、持续上限秒 |
+| cutI0 / cutI1 | 0.4 / 0.65 | 切开瞬态强度（随刀速） |
+| cutS0 / cutS1 | 0.3 / 0.5 | 切开瞬态锐度 |
+| finishMul | 1.5 | 终刀切开强度倍率 |
+
 ## 时间轴（一刀）
 
 ```
