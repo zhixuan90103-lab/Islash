@@ -289,15 +289,15 @@ Linecast 是「碰到即切」。板要「划穿」：对该 mesh **累计 PE→
 | B | 每指刀痕 begin/push/end | `slashDebug.ts` `slashTrail.ts` | 按 id；end 不误清其它指 |
 | C | 同板占用 | `slashWorld.skipMeshes` | 其它划的 `enterLock` + `progress` 进 `skipIds` |
 | D | 意图仍按单划 | `slashIntent.ts` | 只吃传入的 stroke + skipIds |
-| E | 余势只拦本划 | `slashFollow.ts` | 另一指可切刚切开的 keep（新 id） |
+| E | 余势只拦本划 | `slashFollow.ts` | 有效刀钉到抬起，另一指不能切 |
 | F | 夹缝 / 刀光 / 取消推进 | overlay、`screenShake` | 全局一份；计划里写明，不是漏接 |
 | G | 音/震 | `boardFingers` | 最后一指离开才停 |
 | H | cancel / capture | `slashInput` `#stage` | `pointercancel` 只收该 id；`touch-action: none` |
 | I | 刀痕 Map 生命周期 | overlay `trails` | **缺口**：end 不 `delete`，pointerId 递增会积 |
-| J | 一段贯穿 vs 占用 | `resolveCutBySegment` | skip 拦 lock/progress，不拦占用前的一刀贯穿 |
+| J | 无 A 贯穿 | `resolveCutBySegment` | 已删；同段外→外先锁 A 再交 |
 | K | 调试 HUD | `setIntentDebug` | 最后一次 onMove 覆盖 |
 | L | 顿帧 / 入场 | `pendingFly` `slowLeft` `enter.meshId` | 全局；一指切开冻物理，其它指仍可输入 |
-| M | letterbox | `lastInBoundsSeg` | **死代码**，划出设计区仍进判定（旧问题） |
+| M | 舞台边界 | `lastInBoundsSeg` | 故意不用：整屏走刀，只对木板判切 |
 | N | `lostpointercapture` | `slashInput` | `finish(id)` |
 | O | `input.stroke()` | `slashInput` | 仍导出第一个；世界已改 `strokes()` |
 

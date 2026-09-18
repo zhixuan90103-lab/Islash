@@ -78,6 +78,8 @@ export type SlashStroke = {
     diry: number;
     /** 锁 A 后凸包内走过的路程（设计 px）。 */
     path: number;
+    /** 乱划已钉死，出板前不能切。 */
+    dead: boolean;
   } | null;
   startedAt: number;
   lastAt: number;

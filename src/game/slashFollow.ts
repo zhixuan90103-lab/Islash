@@ -33,23 +33,72 @@ function along(h: { ux: number; uy: number }, f: FollowThrough): boolean {
   return h.ux * f.dx + h.uy * f.dy > START.alongMin;
 }
 
-function reverse(h: { ux: number; uy: number }, f: FollowThrough): boolean {
-  return h.ux * f.dx + h.uy * f.dy < -0.15;
+function cruiseSpeed(stroke: SlashStroke): number {
+  const s = stroke.intent.speedSamples;
+  if (s.length === 0) return 0;
+  const a = s.slice().sort((x, y) => x - y);
+  return a[(a.length - 1) >> 1];
 }
 
-function tipOnFollowed(
+/** 从 end 往回走 span 像素，取这段航向。 */
+function windowHeading(
+  pts: DesignPoint[],
+  end: number,
+  span: number,
+): { i: number; ux: number; uy: number } | null {
+  if (end <= 0) return null;
+  let acc = 0;
+  let i = end;
+  while (i > 0 && acc < span) {
+    i -= 1;
+    acc += hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y);
+  }
+  if (acc < span * 0.55) return null;
+  const h = heading(pts[i], pts[end]);
+  return h ? { i, ux: h.ux, uy: h.uy } : null;
+}
+
+/**
+ * 局部尖角：短距离里折得很陡。弧线会转方向但局部夹角小。
+ * 中等尖角还要刀速掉一截（人拐弯会减速）；接近折返则不要求。
+ */
+export function isLocalCorner(
+  stroke: SlashStroke,
+  from: DesignPoint,
+  tip: DesignPoint,
+  dtSec: number,
+): boolean {
+  const raw = stroke.points;
+  const pts =
+    raw.length > 0 &&
+    hypot(raw[raw.length - 1].x - tip.x, raw[raw.length - 1].y - tip.y) < 0.5
+      ? raw
+      : raw.concat([tip]);
+  const end = pts.length - 1;
+  const span = Math.max(12, START.cornerSpan);
+  const recent = windowHeading(pts, end, span);
+  if (!recent) return false;
+  const prev = windowHeading(pts, recent.i, span);
+  if (!prev) return false;
+  const dot = recent.ux * prev.ux + recent.uy * prev.uy;
+  if (dot > START.cornerDot) return false;
+  if (dot <= START.cornerFlip) return true;
+  const now = hypot(tip.x - from.x, tip.y - from.y) / Math.max(1e-4, dtSec);
+  const cruise = cruiseSpeed(stroke);
+  if (cruise < 40) return true;
+  return now <= cruise * START.cornerSlow;
+}
+
+function tipOnKeep(
   f: FollowThrough,
   tip: DesignPoint,
   meshes: THREE.Mesh[],
   camera: THREE.Camera,
 ): boolean {
-  for (const id of [f.keepId, f.dropId]) {
-    const mesh = meshes.find((m) => m.id === id);
-    if (!mesh) continue;
-    const proj = projectMeshHull(mesh, camera);
-    if (proj && pointInConvexHull(tip, proj.hull)) return true;
-  }
-  return false;
+  const mesh = meshes.find((m) => m.id === f.keepId);
+  if (!mesh) return false;
+  const proj = projectMeshHull(mesh, camera);
+  return !!(proj && pointInConvexHull(tip, proj.hull));
 }
 
 /** 网格切开成功后开始余势：同一划的尾巴还是这一刀。 */
@@ -103,13 +152,13 @@ export function followBlocks(
   const f = stroke.follow;
   if (!f) return false;
   if (followHolds(stroke, from, tip)) return true;
-  return tipOnFollowed(f, tip, meshes, camera);
+  return tipOnKeep(f, tip, meshes, camera);
 }
 
 /**
- * 刀尖还在刚切开的两块上，或仍顺着缝甩 → 拦住新刀。
- * 离开两块且不再顺着 → 结束余势，本段也不交刀（避免出尖角那一段贯穿）。
- * 折返 → 立刻结束，本段可切。
+ * 刀尖还在留下块上，或仍顺着缝 → 拦住新刀（不锁新 A）。
+ * 短距离尖角（不是弧线累积转角）→ 结束余势，本段不切，之后可锁新 A。
+ * 离开留下块且不再顺着 → 结束余势，本段也不交刀。
  */
 export function stepFollow(
   stroke: SlashStroke,
@@ -117,15 +166,17 @@ export function stepFollow(
   tip: DesignPoint,
   meshes: THREE.Mesh[],
   camera: THREE.Camera,
+  dtSec = 1 / 60,
 ): boolean {
   const f = stroke.follow;
   if (!f) return false;
-  const h = heading(from, tip);
-  if (h && distSeg(from, tip, f) <= START.corridor && reverse(h, f)) {
-    stroke.follow = null;
-    return false;
+  if (followBlocks(stroke, from, tip, meshes, camera)) {
+    if (isLocalCorner(stroke, from, tip, dtSec)) {
+      stroke.follow = null;
+      return true;
+    }
+    return true;
   }
-  if (followBlocks(stroke, from, tip, meshes, camera)) return true;
   stroke.follow = null;
   return true;
 }

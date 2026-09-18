@@ -11,8 +11,6 @@ import {
   projectMeshHull,
   designToLocalXY,
   localXYToDesign,
-  throughThreshold,
-  type ProjBox,
 } from './slashHit';
 import { followBlocks, stepFollow } from './slashFollow';
 import {
@@ -111,22 +109,9 @@ export function twoEdges(
   return e !== x;
 }
 
-function slashDeepEnough(
-  c0: DesignPoint,
-  c1: DesignPoint,
-  box: ProjBox,
-): boolean {
-  return chordLength(c0, c1) >= throughThreshold(box);
-}
-
 function speedBlend(speed: number): number {
   const cap = Math.max(1, START.fastSpeed);
   return Math.max(0, Math.min(1, speed / cap));
-}
-
-function startRadius(speed: number): number {
-  const t = speedBlend(speed);
-  return START.slowDist + (START.fastDist - START.slowDist) * t;
 }
 
 export function endTravelNeed(speed: number): number {
@@ -134,15 +119,9 @@ export function endTravelNeed(speed: number): number {
   return 1 - (1 - START.endTravelFast) * t;
 }
 
-function lastOutside(
-  points: DesignPoint[],
-  hull: DesignPoint[],
-): DesignPoint | null {
-  let found: DesignPoint | null = null;
-  for (const p of points) {
-    if (!pointInConvexHull(p, hull)) found = p;
-  }
-  return found;
+function startRadius(speed: number): number {
+  const t = speedBlend(speed);
+  return START.slowDist + (START.fastDist - START.slowDist) * t;
 }
 
 /** 从刀尖往回走，最近一次出板点；太远的旧点不用（避免对边当入边）。 */
@@ -169,16 +148,13 @@ function syncLockedA(
   stroke: SlashStroke,
   mesh: THREE.Mesh,
   camera: THREE.Camera,
-  hull?: DesignPoint[],
+  _hull?: DesignPoint[],
 ): DesignPoint | null {
   const L = stroke.enterLock;
   if (!L || L.meshId !== mesh.id) return null;
   const p = localXYToDesign(mesh, camera, L.localX, L.localY);
   if (!p) return L.c0;
   L.c0 = p;
-  if (hull && hull.length >= 3) {
-    L.enterEdge = closestHullEdge(p, hull);
-  }
   return p;
 }
 
@@ -198,9 +174,14 @@ function addInBoardPath(
 }
 
 function pathTooLong(stroke: SlashStroke, straight: number): boolean {
+  if (stroke.enterLock?.dead) return true;
   const path = stroke.enterLock?.path ?? 0;
   const chord = Math.max(1e-4, straight);
-  return path / chord > START.pathChordMax;
+  if (path / chord > START.pathChordMax) {
+    if (stroke.enterLock) stroke.enterLock.dead = true;
+    return true;
+  }
+  return false;
 }
 
 function scribbleWhy(stroke: SlashStroke, straight: number): string {
@@ -223,6 +204,7 @@ function lockEnter(
   c0: DesignPoint,
   tip: DesignPoint,
   enterEdge: number,
+  skipSlop = false,
 ): boolean {
   const meshId = mesh.id;
   if (stroke.enterLock) {
@@ -240,7 +222,7 @@ function lockEnter(
     });
     return true;
   }
-  if (chordLength(c0, tip) < START.lockSlop) return false;
+  if (!skipSlop && chordLength(c0, tip) < START.lockSlop) return false;
   const local = designToLocalXY(c0, camera, mesh);
   if (!local) return false;
   const d = unitDir(c0, tip);
@@ -253,6 +235,7 @@ function lockEnter(
     dirx: d.dx,
     diry: d.dy,
     path: chordLength(c0, tip),
+    dead: false,
   };
   stroke.progress.set(meshId, {
     c0: { x: c0.x, y: c0.y },
@@ -264,40 +247,6 @@ function lockEnter(
     diry: d.dy,
   });
   return true;
-}
-
-function pickEnterByScore(
-  press: DesignPoint,
-  slash: DesignPoint,
-  hull: DesignPoint[],
-  radius: number,
-): { edge: number; point: DesignPoint } | null {
-  const ranked = rankedHullEdges(press, hull);
-  const sl = hypot(slash.x, slash.y) || 1;
-  const sdx = slash.x / sl;
-  const sdy = slash.y / sl;
-  let best: { edge: number; point: DesignPoint; score: number } | null = null;
-  const n = hull.length;
-  for (let i = 0; i < n; i++) {
-    const row = ranked.find((r) => r.edge === i);
-    if (!row || row.dist > radius) continue;
-    const e0 = hull[i];
-    const e1 = hull[(i + 1) % n];
-    const prox = 1 - row.dist / radius;
-    const ex = e1.x - e0.x;
-    const ey = e1.y - e0.y;
-    const el = hypot(ex, ey) || 1;
-    const nx = -ey / el;
-    const ny = ex / el;
-    /** 入边 = 刀向穿入（与穿出对边相反），避免右侧进来锁到左侧。 */
-    const incoming = Math.max(0, -(nx * sdx + ny * sdy));
-    const score = 0.7 * prox + 0.3 * incoming;
-    if (!best || score > best.score) {
-      best = { edge: i, point: row.point, score };
-    }
-  }
-  if (!best || best.score < START.scoreMin) return null;
-  return { edge: best.edge, point: best.point };
 }
 
 function travelAlongCyan(
@@ -334,6 +283,7 @@ export function previewCutChord(
   const st = stroke.progress.get(trackedId);
   const mesh = meshes.find((m) => m.id === trackedId);
   if (!st || !mesh) return null;
+  if (stroke.enterLock?.dead) return null;
   const proj = projectMeshHull(mesh, camera);
   if (!proj) return null;
   const dx = tip.x - st.c0.x;
@@ -405,7 +355,7 @@ export function resolveCutBySegment(
   debugWhy = '';
   if (chordLength(a, b) < 1e-4) return note('微段太短');
 
-  if (stepFollow(stroke, a, b, meshes, camera)) {
+  if (stepFollow(stroke, a, b, meshes, camera, dtSec)) {
     return note('走廊余势（贴着上一刀）');
   }
 
@@ -442,6 +392,10 @@ export function resolveCutBySegment(
     }
     const nowInside = pointInConvexHull(b, proj.hull);
     st.inside = nowInside;
+    if (stroke.enterLock?.dead) {
+      if (!nowInside) endUncutAttempt(stroke, trackedId);
+      return note(scribbleWhy(stroke, chordLength(st.c0, clipped?.c1 ?? b)));
+    }
     if (nowInside) {
       const speed = medianSpeed(stroke, segmentSpeedPxPerSec(a, b, dtSec));
       const need = endTravelNeed(speed);
@@ -465,7 +419,6 @@ export function resolveCutBySegment(
       if (ratio < need) {
         return note(`行程 ${(ratio * 100).toFixed(0)}% < ${(need * 100).toFixed(0)}%`);
       }
-      if (!slashDeepEnough(st.c0, exit, proj.box)) return note('补切不够深');
       if (pathTooLong(stroke, full)) return note(scribbleWhy(stroke, full));
       stroke.progress.delete(trackedId);
       debugWhy = 'commit 板内补切';
@@ -480,7 +433,7 @@ export function resolveCutBySegment(
 
     /**
      * 真出边：微段可能跳过凸包（插值稀）。微段裁不到时用 A→刀尖无限直线出点。
-     * 同边蹭仍丢掉跟踪；对边且够深则提交。
+     * 同边蹭丢掉跟踪（出板清 A）。
      */
     let c0 = st.c0;
     let c1 = clipped?.c1 ?? st.c1;
@@ -488,9 +441,7 @@ export function resolveCutBySegment(
       ? clipped.exitEdge
       : closestHullEdge(c1, proj.hull);
     const microOk =
-      !!clipped &&
-      twoEdges(st.enterEdge, exitEdge, c0, c1, proj.hull) &&
-      slashDeepEnough(c0, c1, proj.box);
+      !!clipped && twoEdges(st.enterEdge, exitEdge, c0, c1, proj.hull);
     if (!microOk) {
       const line = clipInfiniteLineToHull(st.c0, b, proj.hull);
       if (line) {
@@ -502,10 +453,6 @@ export function resolveCutBySegment(
     if (!twoEdges(st.enterEdge, exitEdge, c0, c1, proj.hull)) {
       endUncutAttempt(stroke, trackedId);
       return note(`同边蹭 e${st.enterEdge}→e${exitEdge}`);
-    }
-    if (!slashDeepEnough(c0, c1, proj.box)) {
-      endUncutAttempt(stroke, trackedId);
-      return note('出边不够深');
     }
     const straight = chordLength(c0, c1);
     if (pathTooLong(stroke, straight)) {
@@ -528,72 +475,64 @@ export function resolveCutBySegment(
     if (!proj) continue;
     const insideB = pointInConvexHull(b, proj.hull);
     const outside = recentOutside(stroke.points, proj.hull, START.fastDist * 3);
-    const everOutside = lastOutside(stroke.points, proj.hull);
     const fromOutside = !pointInConvexHull(a, proj.hull);
     const micro = clipChordToHull(a, b, proj.hull);
-    /**
-     * 入边用刀尖附近最近一次出板点，不用整划最远的旧点。
-     */
     const strokeClip =
       outside && insideB
         ? clipChordToHull(outside, b, proj.hull) ??
           clipBackToEnter(outside, b, proj.hull)
         : null;
     const clipped = strokeClip ?? micro;
-    const entered = !!clipped || insideB;
-    if (!entered) continue;
 
-    if (!strokeClip && insideB) {
-      const speed = medianSpeed(stroke, segmentSpeedPxPerSec(a, b, dtSec));
-      const radius = startRadius(speed);
-      const near = rankedHullEdges(b, proj.hull)[0];
-      if (
-        near &&
-        near.dist <= radius &&
-        chordLength(near.point, b) >= START.lockSlop
-      ) {
-        lockEnter(stroke, mesh, camera, near.point, b, near.edge);
-        return note('已锁 A，等出边');
+    if (fromOutside && micro && !insideB) {
+      const c0 = micro.c0;
+      const c1 = micro.c1;
+      const enterEdge = micro.enterEdge;
+      const exitEdge = micro.exitEdge;
+      lockEnter(stroke, mesh, camera, c0, b, enterEdge, true);
+      if (!stroke.enterLock) continue;
+      if (!twoEdges(enterEdge, exitEdge, c0, c1, proj.hull)) {
+        endUncutAttempt(stroke, mesh.id);
+        return note(`同边蹭 e${enterEdge}→e${exitEdge}`);
       }
+      const straight = chordLength(c0, c1);
+      if (pathTooLong(stroke, straight)) {
+        endUncutAttempt(stroke, mesh.id);
+        return note(scribbleWhy(stroke, straight));
+      }
+      stroke.progress.delete(mesh.id);
+      debugWhy = 'commit 真出边';
+      return {
+        mesh,
+        c0,
+        c1,
+        chord: straight,
+        enterEdge: stroke.enterLock.enterEdge,
+      };
     }
 
-    if (!fromOutside && !outside && !everOutside) {
-      const speed = medianSpeed(stroke, segmentSpeedPxPerSec(a, b, dtSec));
-      const radius = startRadius(speed);
-      const slash = { x: b.x - a.x, y: b.y - a.y };
-      if (hypot(slash.x, slash.y) < START.lockSlop) continue;
-      const picked = pickEnterByScore(b, slash, proj.hull, radius);
-      if (!picked) continue;
-      lockEnter(stroke, mesh, camera, picked.point, b, picked.edge);
+    if (insideB && (fromOutside || outside) && clipped) {
+      lockEnter(stroke, mesh, camera, clipped.c0, b, clipped.enterEdge, true);
       return note('已锁 A，等出边');
     }
 
-    const inf = clipped ? null : clipInfiniteLineToHull(a, b, proj.hull);
-    const c0 = clipped?.c0 ?? inf?.[0];
-    if (!c0) continue;
-    const c1 = clipped?.c1 ?? b;
-    const enterEdge = clipped
-      ? clipped.enterEdge
-      : closestHullEdge(c0, proj.hull);
-    const exitEdge = clipped ? clipped.exitEdge : -1;
-    const chord = clipped ? chordLength(c0, c1) : 0;
-
-    if (
-      fromOutside &&
-      micro &&
-      !insideB &&
-      twoEdges(enterEdge, exitEdge, c0, c1, proj.hull)
-    ) {
-      if (slashDeepEnough(c0, c1, proj.box)) {
-        debugWhy = 'commit 一段贯穿';
-        return { mesh, c0, c1, chord, enterEdge };
+    /**
+     * 贴边锁 A：下手已在边附近（第一刀发糊），
+     * 或本按已切过且刀尖贴边（尖角后的第二刀）。
+     */
+    if (insideB && !fromOutside && !outside && stroke.points.length > 0) {
+      const speed = medianSpeed(stroke, segmentSpeedPxPerSec(a, b, dtSec));
+      const radius = startRadius(speed);
+      const near = rankedHullEdges(b, proj.hull)[0];
+      if (!near || near.dist > radius) continue;
+      const second = stroke.slicedIds.size > 0;
+      const down = rankedHullEdges(stroke.points[0], proj.hull)[0];
+      const downOk = !!down && down.dist <= radius;
+      if (second || downOk) {
+        lockEnter(stroke, mesh, camera, near.point, b, near.edge, true);
+        return note('已锁 A，等出边');
       }
-      note('一段贯穿但不够深');
-      continue;
     }
-
-    lockEnter(stroke, mesh, camera, c0, b, enterEdge);
-    return note('已锁 A，等出边');
   }
   if (!debugWhy) note(stroke.armed ? '未入板' : '未出刃');
   return null;
@@ -689,6 +628,7 @@ export function stepSlashIntent(
   let earlyFlash = false;
   let commitFlash = false;
   const scribble =
+    !!stroke.enterLock?.dead ||
     debugWhy.startsWith('乱划路程') ||
     (!!cyan && pathTooLong(stroke, chordLength(cyan.c0, cyan.c1)));
 

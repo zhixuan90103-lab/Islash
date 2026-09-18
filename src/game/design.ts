@@ -165,14 +165,14 @@ export const SLASH = {
 export const START = {
   /** 同时按下的触点上限。有效刀始终只有一把。 */
   maxStrokes: 3,
-  /** 起点：最慢时的吸边半径（设计 px）。 */
-  slowDist: 5,
-  /** 起点：达到 fastSpeed 时的吸边半径。 */
-  fastDist: 36,
+  /** 贴边发糊：最慢时吸到轮廓的半径（设计 px）。板心不锁。 */
+  slowDist: 10,
+  /** 贴边发糊：达到 fastSpeed 时的吸边半径。 */
+  fastDist: 60,
   /** 速度尺子：达到此 px/s 视为「满补偿」。 */
   fastSpeed: 160,
-  /** 终点：满补偿时的青线行程（0.8 = 80%）；速度 0 时为 1。 */
-  endTravelFast: 0.8,
+  /** 终点：满补偿时的青线行程（0.75 = 75%）；速度 0 时为 1。 */
+  endTravelFast: 0.75,
   /** 起点打分低于此不帮。 */
   scoreMin: 0.35,
   /**
@@ -191,10 +191,21 @@ export const START = {
   /** 余势：段方向与已切方向点积大于此才算顺着走。 */
   alongMin: 0.15,
   /**
-   * 锁 A 后板内路程 / A→出点直线。大于此本刀不算切开。
+   * 尖角开第二刀：回看这么长（设计 px）的两段航向夹角。
+   * 弧线摊在路上，局部夹角小；折线拐弯才大。
+   */
+  cornerSpan: 32,
+  /** 两段航向点积低於此视为尖角（0.34 ≈ 70°）。 */
+  cornerDot: 0.34,
+  /** 点积低於此视为折返/直角，不再要求减速。 */
+  cornerFlip: 0,
+  /** 尖角还要刀速掉到巡航的这么多（直角以上可免）。 */
+  cornerSlow: 0.75,
+  /**
+   * 锁 A 后板内路程 / A→出点直线。大于此本刀取消，钉死到出板。
    * 未切开就出板后再进是新刀，不必抬手。
    */
-  pathChordMax: 1.7,
+  pathChordMax: 1.5,
 };
 
 export const START_DEFAULT = { ...START };
@@ -359,6 +370,12 @@ export const SHAKE = {
   cancelPushIn: 0.13,
   /** 回到 rest 的时间（秒）。 */
   cancelPushOut: 0.1,
+  /** 乱划取消：左右晃峰值（世界单位）。0 = 关。 */
+  cancelWobble: 0.012,
+  /** 左右晃时长（秒）。 */
+  cancelWobbleDur: 0.22,
+  /** 左右晃频率（次/秒）。 */
+  cancelWobbleHz: 11,
 };
 
 /** 切开接触：碎屑、挤压、重砍闪、解冻加踢。 */

@@ -29,7 +29,7 @@ export function createSlashHaptics() {
 
   return {
     onFrame(frame: IntentFrame) {
-      if (frame.phase === 'hold') {
+      if (frame.phase === 'hold' || frame.scribble) {
         stopRumble();
         return;
       }

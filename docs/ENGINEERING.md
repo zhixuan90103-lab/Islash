@@ -71,7 +71,7 @@ offset = 居中
 renderer.setSize(390, 844)          // 始终设计分辨率
 ```
 
-触控：`clientToDesign`；letterbox 外忽略。
+触控：舞台坐标；整屏走刀，只对木板判切。
 
 ## 5. Safe Area
 

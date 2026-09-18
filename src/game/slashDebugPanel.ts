@@ -139,6 +139,9 @@ const SHAKE_SLIDERS: SliderSpec[] = [
   { key: 'cancelPush', label: '取消推进', min: 0, max: 1.2, step: 0.02 },
   { key: 'cancelPushIn', label: '推进时长', min: 0.03, max: 0.25, step: 0.01 },
   { key: 'cancelPushOut', label: '回位时长', min: 0.08, max: 0.5, step: 0.02 },
+  { key: 'cancelWobble', label: '取消左右晃', min: 0, max: 0.06, step: 0.001 },
+  { key: 'cancelWobbleDur', label: '左右晃时长', min: 0.06, max: 0.5, step: 0.02 },
+  { key: 'cancelWobbleHz', label: '左右晃频率', min: 4, max: 20, step: 0.5 },
 ];
 
 const FLASH_SLIDERS: SliderSpec[] = [

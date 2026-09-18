@@ -81,6 +81,8 @@ hit    = clamp(speedK * sizeK, SHAKE.floor, 1)
 | freezeMin / freezeMax | 0.032 / 0.1 | 顿帧秒 |
 | cancelPush | 0.06 | 乱划取消时镜头靠近（世界单位）；0 关。不跟 `show` |
 | cancelPushIn / cancelPushOut | 0.13 / 0.1 | 推进 / 回位秒 |
+| cancelWobble | 0.012 | 乱划取消左右晃峰值（世界单位）；0 关 |
+| cancelWobbleDur / cancelWobbleHz | 0.22 / 11 | 左右晃时长秒 / 频率 |
 
 Kick 方向 = 切开 `bladeDir`（入点→出点）。`camera.position` 反向加，画面顺着滑的方向踹。合位移有上限。乱划取消另走 Z 向推进再回，本刀只播一次。
 

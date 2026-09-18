@@ -74,9 +74,9 @@ npm run ios           # build + sync + 开 Xcode
 
 ## 业务怎么加
 
-- 玩法：`src/game/`；规则：[docs/SLASH-DESIGN.md](docs/SLASH-DESIGN.md)；意图：[docs/SLASH-INTENT.md](docs/SLASH-INTENT.md)；打击感：[docs/SLASH-FEEL.md](docs/SLASH-FEEL.md)（帮助只管 A 与青线终点；切开成功才 `beginFollow`，同一划的尾巴不再出刀；板内路程过长不算切开，出板再进是新刀；同时一把有效刀）  
+- 玩法：`src/game/`；规则：[docs/SLASH-DESIGN.md](docs/SLASH-DESIGN.md)；意图：[docs/SLASH-INTENT.md](docs/SLASH-INTENT.md)；打击感：[docs/SLASH-FEEL.md](docs/SLASH-FEEL.md)（入板锁 A、出板清、板心不锁；帮助指出 B；乱划 1.5 倍钉死到出板；余势拦弧线，短距离尖角才第二刀；有效刀钉到抬起）  
 - 保留：adapt / create-renderer / haptics / plugins / `base`  
-- 触控：`clientToDesign` + 忽略 letterbox 外；可同时按下最多 3 指，**有效刀只有一把**（误触按着不动不挡真滑；锁 A 后不换人）  
+- 触控：整屏走刀，只对木板判切；可同时按下最多 3 指，**有效刀只有一把**（误触按着不动不挡真滑；成为有效刀后直到抬起）  
 - UI：只挂 `#ui-root`（进度条 + 调试面板）  
 - 音效：`src/audio/gameAudio.ts` + `docs/AUDIO.md`；禁止热路径 `new Audio()` / 每发一次桥  
 

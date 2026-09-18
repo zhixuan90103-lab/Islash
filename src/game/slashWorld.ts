@@ -331,6 +331,8 @@ export async function mountSlashWorld(
       })
     : { dispose: () => {} };
 
+  let liveCutter: number | null = null;
+
   const skipMeshes = (except: SlashStroke): Set<number> => {
     const ids = new Set<number>();
     for (const s of input.strokes()) {
@@ -343,9 +345,21 @@ export async function mountSlashWorld(
 
   const cutterId = (): number | null => {
     const all = input.strokes();
-    if (all.length === 0) return null;
-    const locked = all.find((s) => s.enterLock);
-    if (locked) return locked.pointerId;
+    if (all.length === 0) {
+      liveCutter = null;
+      return null;
+    }
+    const alive = (id: number) => all.some((s) => s.pointerId === id);
+    if (liveCutter != null && !alive(liveCutter)) liveCutter = null;
+    if (liveCutter != null) {
+      const cur = all.find((s) => s.pointerId === liveCutter);
+      if (cur?.enterLock) return liveCutter;
+      const othersArmed = all.some(
+        (s) => s.pointerId !== liveCutter && s.armed,
+      );
+      if (cur && (cur.armed || !othersArmed)) return liveCutter;
+      liveCutter = null;
+    }
     const armed = all.filter((s) => s.armed);
     const pool = armed.length > 0 ? armed : all;
     let best = pool[0];
@@ -357,7 +371,8 @@ export async function mountSlashWorld(
         bestLen = len;
       }
     }
-    return best.pointerId;
+    liveCutter = best.pointerId;
+    return liveCutter;
   };
 
   const syncTrails = (active: SlashStroke) => {
@@ -388,7 +403,10 @@ export async function mountSlashWorld(
       else overlay.setPredicted(stroke.pointerId, []);
     },
     onMove: (stroke, lastSeg, dtSec) => {
-      if (!syncTrails(stroke)) return;
+      if (!syncTrails(stroke)) {
+        boardFingers.delete(stroke.pointerId);
+        return;
+      }
       const followBefore = stroke.follow;
       const frame = stepSlashIntent(
         wood.cuttables.slice(),
@@ -414,6 +432,7 @@ export async function mountSlashWorld(
         }
       }
       const onBoard =
+        !frame.scribble &&
         !!frame.enter &&
         (frame.phase === 'track' || frame.phase === 'aimed' || !!frame.commit);
       if (onBoard) boardFingers.add(stroke.pointerId);
@@ -513,7 +532,7 @@ export async function mountSlashWorld(
       }
       const slowing = slowLeft > 0;
       if (slowing) slowLeft = Math.max(0, slowLeft - dt);
-      if (enter && CUT.enterDur > 1e-4) {
+      if (enter && CUT.enterDur > 1e-4 && pendingFly.length === 0) {
         enter.t = Math.min(1, enter.t + dt / CUT.enterDur);
         const u = 1 - (1 - enter.t) ** 3;
         const y = enter.from + (enter.to - enter.from) * u;
